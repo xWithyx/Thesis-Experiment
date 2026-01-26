@@ -6,8 +6,8 @@ namespace ThesisExperiment.Commands
 {
     public class CoverageResult
     {
-        public string Tool { get; set; }         
-        public string Scope { get; set; }         
+        public string Tool { get; set; } = string.Empty;
+        public string Scope { get; set; } = string.Empty;
         public int LineCovered { get; set; }        
         public int LineTotal { get; set; }       
         public double? LinePercent { get; set; }

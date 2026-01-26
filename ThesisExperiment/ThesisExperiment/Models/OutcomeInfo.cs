@@ -8,7 +8,7 @@ namespace ThesisExperiment.Models
     {
         public bool Gate1BuildPassed { get; set; }
         public bool Gate2TestPassed { get; set; }
-        public string FinalStatus { get; set; }    
-        public string StopReason { get; set; }
+        public string FinalStatus { get; set; } = string.Empty;
+        public string StopReason { get; set; } = string.Empty;
     }
 }

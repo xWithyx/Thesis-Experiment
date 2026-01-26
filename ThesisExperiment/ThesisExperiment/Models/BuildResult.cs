@@ -6,10 +6,10 @@ namespace ThesisExperiment.Commands
 {
     public class BuildResult
     {
-        public string Command { get; set; }
+        public string Command { get; set; } = string.Empty;
         public int ExitCode { get; set; }
-        public string Stdout { get; set; }
-        public string Stderr { get; set; }
+        public string Stdout { get; set; } = string.Empty;
+        public string Stderr { get; set; } = string.Empty;
         public double DurationSeconds { get; set; }
     }
 }

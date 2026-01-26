@@ -6,10 +6,10 @@ namespace ThesisExperiment.Models
 {
     public class ExperimentInfo
     {
-        public string Variant { get; set; }
+        public string Variant { get; set; } = string.Empty;
         public int AttemptNumber { get; set; }
         public int MaxAttempts { get; set; }
-        public string PromptVersion { get; set; }
-        public string PromptFile { get; set; }
+        public string PromptVersion { get; set; } = string.Empty;
+        public string PromptFile { get; set; } = string.Empty;
     }
 }

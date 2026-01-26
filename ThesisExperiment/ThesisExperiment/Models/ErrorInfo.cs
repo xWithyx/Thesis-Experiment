@@ -6,10 +6,10 @@ namespace ThesisExperiment.Models
 {
     public class ErrorInfo
     {
-        public string Category { get; set; }
-        public string Subcategory { get; set; }
-        public string RawMessage { get; set; }
-        public string LabeledBy { get; set; }      
+        public string Category { get; set; } = string.Empty;
+        public string Subcategory { get; set; } = string.Empty;
+        public string RawMessage { get; set; } = string.Empty;
+        public string LabeledBy { get; set; } = string.Empty;
         public DateTime? LabeledAt { get; set; }
     }
 }
