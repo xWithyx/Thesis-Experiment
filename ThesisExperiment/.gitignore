@@ -13,6 +13,7 @@ out/
 *.suo
 *.userprefs
 *.rsuser
+**/*.suo
 
 ## VS folders
 .vs/
