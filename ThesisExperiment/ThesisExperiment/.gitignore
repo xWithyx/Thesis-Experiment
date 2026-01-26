@@ -1,0 +1,106 @@
+# ------------------------------------------------------------
+# .NET / Visual Studio
+# ------------------------------------------------------------
+
+## Build outputs
+bin/
+obj/
+out/
+
+## User specific
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.rsuser
+
+## VS folders
+.vs/
+.vscode/
+.idea/
+*.iml
+
+## Rider
+.rider/
+
+## MSBuild
+*.proj.user
+*.vcxproj.user
+*.log
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+**/packages/*
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Test results
+TestResults/
+*.trx
+
+## Coverage
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.opencover.xml
+
+## Publish
+publish/
+**/Properties/PublishProfiles/
+
+## Secrets
+secrets.json
+**/secrets.json
+**/*secrets*.json
+
+## Logs
+*.log
+logs/
+log/
+
+## SQLite or local db
+*.db
+*.db-shm
+*.db-wal
+
+# ------------------------------------------------------------
+# OS junk
+# ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ------------------------------------------------------------
+# Thesis experiment specific (adjust to your folder names)
+# ------------------------------------------------------------
+
+## Cloned external projects
+projects/
+repos/
+external/
+
+## Generated experiment runs and results
+runs/
+results/
+reports/
+
+## Temporary working dirs
+tmp/
+temp/
+.cache/
+
+## Large datasets or exports
+data/
+datasets/
+
+## Prompt dumps or raw LLM outputs (if you store them)
+prompts/
+llm_outputs/
+
+# Keep placeholder files if you use them
+!.gitkeep
