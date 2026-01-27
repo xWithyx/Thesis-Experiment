@@ -5,6 +5,7 @@ using CliWrap.Buffered;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Runs Stryker.NET mutation testing and parses results.</summary>
     public class StrykerService
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(10);
@@ -14,13 +15,9 @@ namespace ThesisExperiment.Commands
             PropertyNameCaseInsensitive = true
         };
 
-        // Cache: key = "projectName::filePath", value = parsed file result (null = failed/timeout)
         private readonly Dictionary<string, StrykerFileResult?> _cache = new();
 
-        /// <summary>
-        /// Run Stryker scoped to a source file. Results are cached per file.
-        /// Returns null if Stryker fails or times out.
-        /// </summary>
+        /// <summary>Runs Stryker for a source file (cached per key).</summary>
         public async Task<StrykerFileResult?> RunStrykerForFileAsync(
             string workingDirectory, string sourceFilePath, string cacheKey)
         {
@@ -32,9 +29,7 @@ namespace ThesisExperiment.Commands
             return result;
         }
 
-        /// <summary>
-        /// Extract mutation results for a specific method line range from a cached file result.
-        /// </summary>
+        /// <summary>Extracts mutation score for a specific method's line range.</summary>
         public MutationResult ExtractMethodMutation(
             StrykerFileResult? fileResult, string sourceFilePath, int lineStart, int lineEnd)
         {
@@ -49,7 +44,6 @@ namespace ThesisExperiment.Commands
                 };
             }
 
-            // Find the file entry matching our source file
             var normalizedPath = sourceFilePath.Replace('\\', '/');
             var matchingEntry = fileResult.Files
                 .FirstOrDefault(f => f.Key.Replace('\\', '/').EndsWith(normalizedPath,
@@ -66,7 +60,6 @@ namespace ThesisExperiment.Commands
                 };
             }
 
-            // Filter mutants whose start line falls within [lineStart, lineEnd]
             var methodMutants = matchingEntry.Value.Mutants
                 .Where(m => m.Location?.Start?.Line >= lineStart
                          && m.Location?.Start?.Line <= lineEnd)
@@ -97,20 +90,17 @@ namespace ThesisExperiment.Commands
         private async Task<StrykerFileResult?> ExecuteStrykerAsync(
             string workingDirectory, string sourceFilePath)
         {
-            // Clean previous Stryker output
             var strykerOutputDir = Path.Combine(workingDirectory, "StrykerOutput");
             if (Directory.Exists(strykerOutputDir))
             {
                 try { Directory.Delete(strykerOutputDir, recursive: true); }
-                catch { /* best effort */ }
+                catch { }
             }
 
-            // Ensure --mutate path is relative to the working directory
             var relativeSourcePath = Path.IsPathRooted(sourceFilePath)
                 ? Path.GetRelativePath(workingDirectory, sourceFilePath)
                 : sourceFilePath;
 
-            // Build Stryker arguments
             var args = new List<string>
             {
                 "stryker",
@@ -118,7 +108,6 @@ namespace ThesisExperiment.Commands
                 "--reporter", "json"
             };
 
-            // Auto-find solution file for Stryker (it needs one in multi-project repos)
             var solutionFile = FindSolutionFile(workingDirectory);
             if (solutionFile != null)
             {
@@ -143,7 +132,6 @@ namespace ThesisExperiment.Commands
                     return null;
                 }
 
-                // Find and parse the JSON report
                 return ParseLatestReport(workingDirectory);
             }
             catch (OperationCanceledException)
@@ -176,7 +164,6 @@ namespace ThesisExperiment.Commands
                 return null;
             }
 
-            // Use the most recently written report
             var latestReport = reportFiles
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .First();
@@ -208,10 +195,6 @@ namespace ThesisExperiment.Commands
             return text[..maxLength] + "...";
         }
 
-        /// <summary>
-        /// Find a .sln or .slnx file in the repo root directory.
-        /// Returns relative path to the solution, or null if not found.
-        /// </summary>
         private static string? FindSolutionFile(string repoRoot)
         {
             var slnFiles = Directory.GetFiles(repoRoot, "*.sln", SearchOption.TopDirectoryOnly);
@@ -224,8 +207,6 @@ namespace ThesisExperiment.Commands
 
             return null;
         }
-
-        // --- Internal deserialization models ---
 
         public class StrykerFileResult
         {

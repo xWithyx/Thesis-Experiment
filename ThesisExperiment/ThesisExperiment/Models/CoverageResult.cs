@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Method-level line and branch coverage metrics.</summary>
     public class CoverageResult
     {
         public string Tool { get; set; } = string.Empty;

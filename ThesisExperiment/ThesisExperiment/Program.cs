@@ -59,12 +59,33 @@ collectBaselineCommand.SetAction(async (parseResult, cancellationToken) =>
     await command.ExecuteAsync(output);
 });
 
+// --- run-single-shot ---
+var singleShotOutputOption = new Option<string>("--output")
+{
+    Description = "Directory containing method_list_all.csv and project_list_selected.csv",
+    DefaultValueFactory = _ => "appendix"
+};
+
+var runSingleShotCommand = new Command("run-single-shot",
+    "Generate tests with single-shot LLM prompting (Variant B)")
+{
+    singleShotOutputOption
+};
+
+runSingleShotCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var output = parseResult.GetValue(singleShotOutputOption)!;
+    var command = new RunSingleShotCommand();
+    await command.ExecuteAsync(output);
+});
+
 // --- root ---
 var rootCommand = new RootCommand("Thesis Experiment Tool")
 {
     selectProjectsCommand,
     sampleMethodsCommand,
-    collectBaselineCommand
+    collectBaselineCommand,
+    runSingleShotCommand
 };
 
 return await rootCommand.Parse(args).InvokeAsync();

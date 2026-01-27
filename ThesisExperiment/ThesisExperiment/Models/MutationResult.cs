@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Method-level mutation testing metrics.</summary>
     public class MutationResult
     {
         public string Tool { get; set; } = string.Empty;

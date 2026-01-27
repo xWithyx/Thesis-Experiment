@@ -4,19 +4,16 @@ using CliWrap.Buffered;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Runs dotnet restore + build.</summary>
     public class DotnetBuildService
     {
         private const int MaxOutputLength = 10_000;
 
-        /// <summary>
-        /// Run dotnet restore followed by dotnet build --no-restore.
-        /// Returns a populated BuildResult with exit code, stdout, stderr, and duration.
-        /// </summary>
+        /// <summary>Restores and builds the project.</summary>
         public async Task<BuildResult> BuildAsync(string workingDirectory)
         {
             var sw = Stopwatch.StartNew();
 
-            // Step 1: dotnet restore
             var restoreResult = await Cli.Wrap("dotnet")
                 .WithArguments("restore")
                 .WithWorkingDirectory(workingDirectory)
@@ -36,7 +33,6 @@ namespace ThesisExperiment.Commands
                 };
             }
 
-            // Step 2: dotnet build --no-restore (Debug config for coverage compatibility)
             var buildResult = await Cli.Wrap("dotnet")
                 .WithArguments("build --no-restore")
                 .WithWorkingDirectory(workingDirectory)

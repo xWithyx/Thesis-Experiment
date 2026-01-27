@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Project identification for a RunRecord.</summary>
     public class ProjectInfo
     {
         public string Name { get; set; } = string.Empty;

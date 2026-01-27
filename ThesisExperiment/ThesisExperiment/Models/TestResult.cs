@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Captured output from a dotnet test invocation.</summary>
     public class TestResult
     {
         public string Command { get; set; } = string.Empty;

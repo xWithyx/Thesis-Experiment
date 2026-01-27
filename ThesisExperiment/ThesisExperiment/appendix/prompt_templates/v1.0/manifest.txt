@@ -1,0 +1,20 @@
+Prompt Template Manifest
+========================
+Version:  v1.0
+Date:     2026-01-27
+Status:   FROZEN (do not modify — create v1.1 for changes)
+
+Files:
+  single_shot.txt    — Single-shot test generation (Step 5, Variant B)
+  repair_attempt.txt — Repair loop iteration (Step 6, Variant C)
+
+Placeholders:
+  {{TEST_FRAMEWORK}}  — xUnit | NUnit | MSTest (auto-detected per project)
+  {{TEST_ATTRIBUTE}}   — Fact | Test | TestMethod (matches framework)
+  {{NAMESPACE}}        — Namespace of the focal class
+  {{CLASS_NAME}}       — Name of the focal class
+  {{SIGNATURE}}        — Full method signature
+  {{METHOD_BODY}}      — Source code of the focal method
+  {{CLASS_CONTEXT}}    — Other methods and fields in the class
+  {{PREVIOUS_TEST}}    — Previous test code (repair_attempt.txt only)
+  {{ERROR_MESSAGE}}    — Build/test error output (repair_attempt.txt only)

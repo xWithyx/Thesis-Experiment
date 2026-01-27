@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>Error details for failed pipeline steps.</summary>
     public class ErrorInfo
     {
         public string Category { get; set; } = string.Empty;

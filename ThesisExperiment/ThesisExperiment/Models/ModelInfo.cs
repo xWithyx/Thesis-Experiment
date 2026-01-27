@@ -1,5 +1,6 @@
 ﻿namespace ThesisExperiment.Commands
 {
+    /// <summary>LLM provider and configuration details.</summary>
     public class ModelInfo
     {
         public string Provider { get; set; } = string.Empty;

@@ -10,6 +10,7 @@ using ThesisExperiment.Models;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Selects 5 projects and samples 10 public methods each.</summary>
     public class SampleMethodsCommand
     {
         private const int Seed = 42;
@@ -21,6 +22,7 @@ namespace ThesisExperiment.Commands
             "Equals", "GetHashCode", "ToString"
         };
 
+        /// <summary>Runs the sampling pipeline and writes CSV results.</summary>
         public async Task ExecuteAsync(string outputPath)
         {
             var filteredPath = Path.Combine(outputPath, "project_list_filtered.csv");
@@ -34,7 +36,6 @@ namespace ThesisExperiment.Commands
                 return;
             }
 
-            // Select 5 projects: sort by repo_url, then shuffle with seed 42
             Console.WriteLine($"Selecting {ProjectCount} projects (sort by repo_url, shuffle seed {Seed})...");
             var sorted = filteredProjects.OrderBy(p => p.RepoUrl, StringComparer.Ordinal).ToList();
             Shuffle(sorted, Seed);
@@ -44,7 +45,6 @@ namespace ThesisExperiment.Commands
             foreach (var p in selected)
                 Console.WriteLine($"  - {p.RepoUrl}");
 
-            // For each project: ensure clone exists, extract and sample methods
             var allMethods = new List<SampledMethod>();
 
             for (int i = 0; i < selected.Count; i++)
@@ -52,7 +52,6 @@ namespace ThesisExperiment.Commands
                 var project = selected[i];
                 Console.WriteLine($"\n[{i + 1}/{selected.Count}] Processing {project.RepoUrl}...");
 
-                // Ensure repo is cloned
                 if (!Directory.Exists(project.ClonePath))
                 {
                     Console.WriteLine("  Clone not found, cloning...");
@@ -60,15 +59,12 @@ namespace ThesisExperiment.Commands
                     await CloneRepository(cloneUrl, project.ClonePath);
                 }
 
-                // Get current commit hash from the clone
                 var commitHash = await GetCommitHash(project.ClonePath);
                 project.CommitHash = commitHash;
                 Console.WriteLine($"  Commit: {commitHash}");
 
-                // Derive project name from repo URL (last segment)
                 var projectName = project.RepoUrl.Split('/').Last();
 
-                // Extract all eligible public methods via Roslyn
                 Console.WriteLine("  Extracting public methods...");
                 var methods = ExtractPublicMethods(project.ClonePath, projectName, project.RepoUrl, commitHash);
                 Console.WriteLine($"  Found {methods.Count} eligible public methods.");
@@ -79,7 +75,6 @@ namespace ThesisExperiment.Commands
                     continue;
                 }
 
-                // Sample 10 methods: sort by identifier, then shuffle with seed 42
                 var sortedMethods = methods.OrderBy(m => m.Identifier, StringComparer.Ordinal).ToList();
                 Shuffle(sortedMethods, Seed);
                 var sampled = sortedMethods.Take(MethodsPerProject).ToList();
@@ -91,17 +86,14 @@ namespace ThesisExperiment.Commands
                 allMethods.AddRange(sampled);
             }
 
-            // Write project_list_selected.csv
             var selectedPath = Path.Combine(outputPath, "project_list_selected.csv");
             WriteCsv(selected, selectedPath);
             Console.WriteLine($"\nWrote {selected.Count} projects to {selectedPath}");
 
-            // Write method_list_all.csv
             var methodsPath = Path.Combine(outputPath, "method_list_all.csv");
             WriteCsv(allMethods, methodsPath);
             Console.WriteLine($"Wrote {allMethods.Count} methods to {methodsPath}");
 
-            // Validation
             Console.WriteLine("\n=== Validation ===");
             Console.WriteLine($"Projects selected: {selected.Count} (expected: {ProjectCount})");
             Console.WriteLine($"Methods sampled:   {allMethods.Count} (expected: {ProjectCount * MethodsPerProject})");
@@ -131,9 +123,6 @@ namespace ThesisExperiment.Commands
             Console.WriteLine("They are frozen and must not change.");
         }
 
-        /// <summary>
-        /// Extract all eligible public methods from a cloned repository using Roslyn.
-        /// </summary>
         private List<SampledMethod> ExtractPublicMethods(
             string clonePath, string projectName, string repoUrl, string commitHash)
         {
@@ -182,7 +171,7 @@ namespace ThesisExperiment.Commands
                             MethodName = methodName,
                             Identifier = identifier,
                             FilePath = relativePath,
-                            LineStart = lineSpan.StartLinePosition.Line + 1, // 1-based
+                            LineStart = lineSpan.StartLinePosition.Line + 1,
                             LineEnd = lineSpan.EndLinePosition.Line + 1,
                             ReturnType = method.ReturnType.ToString(),
                             ParameterTypes = paramTypes,
@@ -193,17 +182,12 @@ namespace ThesisExperiment.Commands
                 }
                 catch
                 {
-                    // Skip files that cannot be parsed
                 }
             }
 
             return methods;
         }
 
-        /// <summary>
-        /// Check if a method is inside a fully public type hierarchy.
-        /// All containing types must be public.
-        /// </summary>
         private static bool IsInPublicTypeHierarchy(MethodDeclarationSyntax method)
         {
             var parent = method.Parent;
@@ -220,10 +204,6 @@ namespace ThesisExperiment.Commands
             return true;
         }
 
-        /// <summary>
-        /// Get the namespace containing a syntax node.
-        /// Handles both classic and file-scoped namespaces.
-        /// </summary>
         private static string GetNamespace(Microsoft.CodeAnalysis.SyntaxNode node)
         {
             var current = node.Parent;
@@ -236,10 +216,6 @@ namespace ThesisExperiment.Commands
             return string.Empty;
         }
 
-        /// <summary>
-        /// Get the containing type name, including nested type path (e.g., "Outer.Inner").
-        /// Includes generic type parameters.
-        /// </summary>
         private static string GetContainingTypeName(Microsoft.CodeAnalysis.SyntaxNode node)
         {
             var parts = new List<string>();
@@ -258,9 +234,6 @@ namespace ThesisExperiment.Commands
             return string.Join(".", parts);
         }
 
-        /// <summary>
-        /// Check if a file path should be excluded from analysis.
-        /// </summary>
         private static bool ShouldExcludeFile(string filePath)
         {
             var normalized = filePath.Replace('\\', '/').ToLower();
@@ -272,9 +245,6 @@ namespace ThesisExperiment.Commands
                    normalized.Contains("/migrations/");
         }
 
-        /// <summary>
-        /// Fisher-Yates shuffle with a fixed seed for reproducibility.
-        /// </summary>
         private static void Shuffle<T>(List<T> list, int seed)
         {
             var rng = new Random(seed);

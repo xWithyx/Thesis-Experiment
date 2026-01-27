@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>Gate results and final status of a run.</summary>
     public class OutcomeInfo
     {
         public bool Gate1BuildPassed { get; set; }

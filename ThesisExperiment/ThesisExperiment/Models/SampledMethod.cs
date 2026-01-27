@@ -2,6 +2,7 @@ using CsvHelper.Configuration.Attributes;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>CSV-mapped sampled focal method.</summary>
     public class SampledMethod
     {
         [Name("project_name")]

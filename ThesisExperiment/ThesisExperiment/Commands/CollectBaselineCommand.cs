@@ -6,6 +6,7 @@ using ThesisExperiment.Models;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Measures existing tests for all focal methods (Variant A baseline).</summary>
     public class CollectBaselineCommand
     {
         private readonly GitCleanupService _git = new();
@@ -15,15 +16,14 @@ namespace ThesisExperiment.Commands
         private readonly StrykerService _strykerService = new();
         private readonly JsonLogger _jsonLogger = new();
 
+        /// <summary>Builds, tests, collects coverage and mutation for each method.</summary>
         public async Task ExecuteAsync(string outputPath)
         {
-            // Phase 1: Read input
             var methodsPath = Path.Combine(outputPath, "method_list_all.csv");
             Console.WriteLine($"Reading methods from {methodsPath}...");
             var methods = ReadCsv<SampledMethod>(methodsPath);
             Console.WriteLine($"Loaded {methods.Count} methods.");
 
-            // Optionally read project_list_selected.csv for Stars info
             var selectedPath = Path.Combine(outputPath, "project_list_selected.csv");
             var projectStarsMap = new Dictionary<string, int>();
             if (File.Exists(selectedPath))
@@ -33,7 +33,6 @@ namespace ThesisExperiment.Commands
                     projectStarsMap[p.RepoUrl] = p.Stars;
             }
 
-            // Phase 2: Group by project
             var grouped = methods.GroupBy(m => m.RepoUrl).ToList();
             Console.WriteLine($"Found {grouped.Count} project(s).\n");
 
@@ -41,7 +40,6 @@ namespace ThesisExperiment.Commands
             int totalRecords = 0;
             int failedProjects = 0;
 
-            // Phase 3: Process each project
             foreach (var projectGroup in grouped)
             {
                 var repoUrl = projectGroup.Key;
@@ -51,11 +49,9 @@ namespace ThesisExperiment.Commands
 
                 Console.WriteLine($"=== [{projectName}] {projectMethods.Count} methods, commit {commitHash[..Math.Min(12, commitHash.Length)]} ===");
 
-                // Step A: Ensure repo cloned and at correct commit
                 string repoPath;
                 try
                 {
-                    // Derive clone path from project name (matching Step 2 convention)
                     var clonePath = Path.Combine("repos", projectName);
                     repoPath = await _git.EnsureRepoAtCommitAsync(repoUrl, clonePath, commitHash);
                 }
@@ -72,7 +68,6 @@ namespace ThesisExperiment.Commands
                     continue;
                 }
 
-                // Step B: Build
                 Console.WriteLine("  Building...");
                 var buildResult = await _buildService.BuildAsync(repoPath);
                 bool buildPassed = buildResult.ExitCode == 0;
@@ -90,17 +85,14 @@ namespace ThesisExperiment.Commands
                     continue;
                 }
 
-                // Step C: Test with coverage
                 Console.WriteLine("  Running tests with coverage collection...");
                 var (testResult, coverageDir) = await _testService.RunTestsWithCoverageAsync(repoPath);
                 bool testPassed = testResult.ExitCode == 0;
                 Console.WriteLine($"  Tests: {(testPassed ? "PASSED" : "FAILED")} (exit {testResult.ExitCode})");
 
-                // Step D: Find Cobertura files
                 var coberturaFiles = _coverletService.FindCoberturaFiles(coverageDir);
                 Console.WriteLine($"  Found {coberturaFiles.Count} coverage report(s).");
 
-                // Step E: Run Stryker per unique source file (cached by project::commit::file)
                 var uniqueFiles = projectMethods
                     .Select(m => m.FilePath)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -125,27 +117,22 @@ namespace ThesisExperiment.Commands
                     }
                 }
 
-                // Step F: Write RunRecord per method
                 Console.WriteLine($"  Writing {projectMethods.Count} RunRecords...");
                 foreach (var method in projectMethods)
                 {
-                    // Coverage: parse for this method's line range
                     var coverage = _coverletService.ParseMethodCoverage(
                         coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath);
                     if (!testPassed)
                         coverage.Note = "collected from failing test run";
 
-                    // Mutation: look up from pre-fetched results (no redundant async call)
                     strykerResults.TryGetValue(method.FilePath, out var fileResult);
                     var mutation = _strykerService.ExtractMethodMutation(
                         fileResult, method.FilePath, method.LineStart, method.LineEnd);
 
-                    // Build RunRecord
                     var record = BuildRunRecord(
                         projectName, method, repoUrl, commitHash, projectStarsMap,
                         buildResult, testResult, coverage, mutation);
 
-                    // Write JSON
                     var filePath = JsonLogger.GetOutputPath(runsDir, projectName, method.Identifier, "A");
                     _jsonLogger.WriteRunRecord(record, filePath);
                     Console.WriteLine($"    Wrote: {Path.GetFileName(filePath)}");
@@ -153,7 +140,6 @@ namespace ThesisExperiment.Commands
                 }
             }
 
-            // Summary
             Console.WriteLine($"\n=== Baseline Collection Complete ===");
             Console.WriteLine($"Total RunRecords written: {totalRecords}");
             Console.WriteLine($"Projects processed:       {grouped.Count}");

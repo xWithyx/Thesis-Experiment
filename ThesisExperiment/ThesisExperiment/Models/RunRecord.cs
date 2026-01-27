@@ -2,6 +2,7 @@
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Top-level experiment record written as JSON per method.</summary>
     public class RunRecord
     {
         public string RunId { get; set; } = string.Empty;

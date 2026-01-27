@@ -3,13 +3,10 @@ using CliWrap.Buffered;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Handles git clone, checkout, and clean operations.</summary>
     public class GitCleanupService
     {
-        /// <summary>
-        /// Ensure repo is cloned and checked out to the exact frozen commit.
-        /// If the clone is shallow, unshallow it first so the commit is available.
-        /// Returns the local path to the repo working directory.
-        /// </summary>
+        /// <summary>Clones (if needed) and checks out a repo at a specific commit.</summary>
         public async Task<string> EnsureRepoAtCommitAsync(
             string repoUrl, string clonePath, string commitHash)
         {
@@ -31,7 +28,6 @@ namespace ThesisExperiment.Commands
                     throw new Exception($"Git clone failed: {result.StandardError}");
             }
 
-            // Check if shallow clone (Step 1 used --depth 1)
             var isShallow = await RunGitAsync(clonePath, "rev-parse --is-shallow-repository");
             if (isShallow.Trim().Equals("true", StringComparison.OrdinalIgnoreCase))
             {
@@ -46,7 +42,6 @@ namespace ThesisExperiment.Commands
                     Console.WriteLine($"  WARNING: git fetch --unshallow failed: {unshallow.StandardError}");
             }
 
-            // Checkout the frozen commit
             Console.WriteLine($"  Checking out commit {commitHash}...");
             var checkout = await Cli.Wrap("git")
                 .WithArguments($"checkout {commitHash}")
@@ -57,7 +52,6 @@ namespace ThesisExperiment.Commands
             if (checkout.ExitCode != 0)
                 throw new Exception($"Git checkout failed: {checkout.StandardError}");
 
-            // Ensure clean state
             await Cli.Wrap("git")
                 .WithArguments($"reset --hard {commitHash}")
                 .WithWorkingDirectory(clonePath)
@@ -71,6 +65,22 @@ namespace ThesisExperiment.Commands
                 .ExecuteBufferedAsync();
 
             return clonePath;
+        }
+
+        /// <summary>Resets repo to clean state via git reset --hard + clean.</summary>
+        public async Task ResetToCleanStateAsync(string repoPath, string commitHash)
+        {
+            await Cli.Wrap("git")
+                .WithArguments($"reset --hard {commitHash}")
+                .WithWorkingDirectory(repoPath)
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+
+            await Cli.Wrap("git")
+                .WithArguments("clean -fd")
+                .WithWorkingDirectory(repoPath)
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
         }
 
         private static async Task<string> RunGitAsync(string workingDirectory, string arguments)

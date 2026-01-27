@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Captured output from a dotnet build invocation.</summary>
     public class BuildResult
     {
         public string Command { get; set; } = string.Empty;

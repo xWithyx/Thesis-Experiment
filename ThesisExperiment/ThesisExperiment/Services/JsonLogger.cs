@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Serializes RunRecords to JSON files.</summary>
     public class JsonLogger
     {
         private static readonly JsonSerializerOptions Options = new()
@@ -13,6 +14,7 @@ namespace ThesisExperiment.Commands
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
         };
 
+        /// <summary>Writes a RunRecord as indented JSON.</summary>
         public void WriteRunRecord(RunRecord record, string filePath)
         {
             var dir = Path.GetDirectoryName(filePath);
@@ -23,6 +25,7 @@ namespace ThesisExperiment.Commands
             File.WriteAllText(filePath, json, Encoding.UTF8);
         }
 
+        /// <summary>Builds the output file path for a RunRecord.</summary>
         public static string GetOutputPath(string runsDir, string projectName,
             string identifier, string variant)
         {

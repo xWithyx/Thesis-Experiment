@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>Experiment variant and attempt metadata.</summary>
     public class ExperimentInfo
     {
         public string Variant { get; set; } = string.Empty;

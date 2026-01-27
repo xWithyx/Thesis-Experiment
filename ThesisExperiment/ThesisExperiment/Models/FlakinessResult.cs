@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>Flakiness detection results from repeated test runs.</summary>
     public class FlakinessResult
     {
         public int RunsExecuted { get; set; }

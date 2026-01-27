@@ -2,6 +2,7 @@ using CsvHelper.Configuration.Attributes;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>CSV-mapped candidate project from GitHub search.</summary>
     public class ProjectCandidate
     {
         [Name("repo_url")]
@@ -43,7 +44,6 @@ namespace ThesisExperiment.Models
         [Name("fail_reasons")]
         public string FailReasons { get; set; } = string.Empty;
 
-        // Internal fields (not written to CSV)
         [Ignore]
         public string CloneUrl { get; set; } = string.Empty;
 

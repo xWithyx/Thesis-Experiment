@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Focal method identification and location.</summary>
     public class MethodInfo
     {
         public string Identifier { get; set; } = string.Empty;

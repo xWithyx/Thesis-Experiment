@@ -3,12 +3,10 @@ using System.Xml.Linq;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Parses Coverlet/Cobertura XML for method-level coverage.</summary>
     public class CoverletService
     {
-        /// <summary>
-        /// Find all coverage.cobertura.xml files in the results directory.
-        /// dotnet test creates them in GUID-named subdirectories.
-        /// </summary>
+        /// <summary>Finds all coverage.cobertura.xml files in a directory.</summary>
         public List<string> FindCoberturaFiles(string coverageResultsDir)
         {
             if (!Directory.Exists(coverageResultsDir))
@@ -18,11 +16,7 @@ namespace ThesisExperiment.Commands
                 SearchOption.AllDirectories).ToList();
         }
 
-        /// <summary>
-        /// Parse Cobertura XML and extract per-method coverage for a specific
-        /// source file and line range [lineStart, lineEnd].
-        /// Merges coverage from all provided Cobertura files.
-        /// </summary>
+        /// <summary>Computes line and branch coverage for a method's line range.</summary>
         public CoverageResult ParseMethodCoverage(
             List<string> coberturaFiles,
             string methodFilePath,
@@ -30,15 +24,11 @@ namespace ThesisExperiment.Commands
             int lineEnd,
             string repoRootPath)
         {
-            // Normalize the method file path for matching (repo-relative, forward slashes)
             var normalizedMethodPath = methodFilePath.Replace('\\', '/');
 
-            // Build absolute candidate for comparison
             var absoluteCandidate = Path.Combine(repoRootPath, methodFilePath)
                 .Replace('\\', '/');
 
-            // Collect all line data across all Cobertura files
-            // Key: line number, Value: (maxHits, isBranch, coveredBranches, totalBranches)
             var lineData = new Dictionary<int, LineCoverageInfo>();
 
             foreach (var coberturaFile in coberturaFiles)
@@ -53,10 +43,6 @@ namespace ThesisExperiment.Commands
                         var filename = cls.Attribute("filename")?.Value ?? "";
                         var normalizedFilename = filename.Replace('\\', '/');
 
-                        // Multi-strategy match (all normalized to forward slashes):
-                        // 1. Cobertura path ends with repo-relative method path on a / boundary
-                        // 2. Repo-relative method path ends with Cobertura path on a / boundary
-                        // 3. Absolute path exact match
                         bool matches = EndsWithOnBoundary(normalizedFilename, normalizedMethodPath)
                             || EndsWithOnBoundary(normalizedMethodPath, normalizedFilename)
                             || normalizedFilename.Equals(absoluteCandidate, StringComparison.OrdinalIgnoreCase);
@@ -86,7 +72,6 @@ namespace ThesisExperiment.Commands
                                 var condCov = line.Attribute("condition-coverage")?.Value;
                                 if (condCov != null)
                                 {
-                                    // Parse "50% (1/2)" format
                                     var match = Regex.Match(condCov, @"\((\d+)/(\d+)\)");
                                     if (match.Success)
                                     {
@@ -96,7 +81,6 @@ namespace ThesisExperiment.Commands
                                 }
                             }
 
-                            // Merge: take max hits, union branch info
                             if (lineData.TryGetValue(lineNumber, out var existing))
                             {
                                 existing.Hits = Math.Max(existing.Hits, hits);
@@ -122,7 +106,6 @@ namespace ThesisExperiment.Commands
                 }
             }
 
-            // Compute coverage metrics
             int totalLines = lineData.Count;
             int coveredLines = lineData.Values.Count(l => l.Hits > 0);
             int totalBranchesSum = lineData.Values.Sum(l => l.TotalBranches);
@@ -145,17 +128,12 @@ namespace ThesisExperiment.Commands
             };
         }
 
-        /// <summary>
-        /// Check if 'haystack' ends with 'needle' and the match starts at a path separator
-        /// (or needle == haystack). Prevents "XBar.cs" matching "Bar.cs".
-        /// </summary>
         private static bool EndsWithOnBoundary(string haystack, string needle)
         {
             if (!haystack.EndsWith(needle, StringComparison.OrdinalIgnoreCase))
                 return false;
             if (haystack.Length == needle.Length)
                 return true;
-            // The character just before the match must be a path separator
             char preceding = haystack[haystack.Length - needle.Length - 1];
             return preceding == '/' || preceding == '\\';
         }

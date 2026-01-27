@@ -4,6 +4,7 @@ using System.Text;
 
 namespace ThesisExperiment.Models
 {
+    /// <summary>LLM response data and token usage.</summary>
     public class ResponseInfo
     {
         public string RawText { get; set; } = string.Empty;

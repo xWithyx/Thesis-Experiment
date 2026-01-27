@@ -10,6 +10,7 @@ using ThesisExperiment.Models;
 
 namespace ThesisExperiment.Commands
 {
+    /// <summary>Searches GitHub for C# repos and evaluates them as candidates.</summary>
     public class SelectProjectsCommand
     {
         private const int MinStars = 50;
@@ -44,9 +45,7 @@ namespace ThesisExperiment.Commands
             }
         }
 
-        /// <summary>
-        /// Main entry point. Searches GitHub, evaluates projects, writes CSV files.
-        /// </summary>
+        /// <summary>Runs the full selection pipeline and writes CSV results.</summary>
         public async Task ExecuteAsync(string outputPath)
         {
             Console.WriteLine("Starting project selection...");
@@ -109,10 +108,6 @@ namespace ThesisExperiment.Commands
             Console.WriteLine("They are frozen and must not change.");
         }
 
-        /// <summary>
-        /// Search GitHub for C# repositories matching our criteria.
-        /// Excludes forks and archived repos.
-        /// </summary>
         private async Task<List<Repository>> SearchGitHubRepositories()
         {
             var allRepos = new List<Repository>();
@@ -135,7 +130,6 @@ namespace ThesisExperiment.Commands
                 if (result.Items.Count == 0)
                     break;
 
-                // Post-filter: exclude forks and archived repos
                 var valid = result.Items
                     .Where(r => !r.Fork && !r.Archived)
                     .ToList();
@@ -151,9 +145,6 @@ namespace ThesisExperiment.Commands
             return allRepos.Take(MaxCandidates).ToList();
         }
 
-        /// <summary>
-        /// Check GitHub API rate limit and wait if necessary.
-        /// </summary>
         private async Task CheckRateLimit()
         {
             var apiInfo = _github.GetLastApiInfo();
@@ -178,9 +169,6 @@ namespace ThesisExperiment.Commands
             }
         }
 
-        /// <summary>
-        /// Clone a repository and evaluate if it meets our criteria.
-        /// </summary>
         private async Task<ProjectCandidate> EvaluateProject(Repository repo)
         {
             var dirName = $"{repo.Owner.Login}__{repo.Name}";
@@ -221,9 +209,6 @@ namespace ThesisExperiment.Commands
             return candidate;
         }
 
-        /// <summary>
-        /// Clone a Git repository to a local path (shallow clone).
-        /// </summary>
         private async Task CloneRepository(string cloneUrl, string localPath)
         {
             if (Directory.Exists(localPath))
@@ -242,9 +227,6 @@ namespace ThesisExperiment.Commands
             }
         }
 
-        /// <summary>
-        /// Get the current commit hash of a repository.
-        /// </summary>
         private async Task<string> GetCurrentCommitHash(string localPath)
         {
             var result = await Cli.Wrap("git")
@@ -261,9 +243,6 @@ namespace ThesisExperiment.Commands
             return result.StandardOutput.Trim();
         }
 
-        /// <summary>
-        /// Detect test projects: count them and identify frameworks.
-        /// </summary>
         private TestDetectionResult DetectTestProjects(string localPath)
         {
             var csprojFiles = Directory.GetFiles(localPath, "*.csproj", SearchOption.AllDirectories);
@@ -309,9 +288,6 @@ namespace ThesisExperiment.Commands
             return new TestDetectionResult(testProjectCount > 0, testProjectCount, frameworks);
         }
 
-        /// <summary>
-        /// Try to build the project with dotnet build (Release configuration).
-        /// </summary>
         private async Task<bool> TryBuild(string localPath)
         {
             var restoreResult = await Cli.Wrap("dotnet")
@@ -334,10 +310,6 @@ namespace ThesisExperiment.Commands
             return buildResult.ExitCode == 0;
         }
 
-        /// <summary>
-        /// Check if a file path should be excluded from analysis.
-        /// Excludes test/spec directories and build output.
-        /// </summary>
         private static bool ShouldExcludeFile(string filePath)
         {
             var normalized = filePath.Replace('\\', '/').ToLower();
@@ -347,9 +319,6 @@ namespace ThesisExperiment.Commands
                    normalized.Contains("/obj/");
         }
 
-        /// <summary>
-        /// Count public methods in C# production files using Roslyn.
-        /// </summary>
         private int CountPublicMethods(string localPath)
         {
             var count = 0;
@@ -374,16 +343,12 @@ namespace ThesisExperiment.Commands
                 }
                 catch
                 {
-                    // Skip files that cannot be parsed
                 }
             }
 
             return count;
         }
 
-        /// <summary>
-        /// Count non-empty, non-comment lines in C# production files.
-        /// </summary>
         private int CountLinesOfCode(string localPath)
         {
             var count = 0;
@@ -412,17 +377,12 @@ namespace ThesisExperiment.Commands
                 }
                 catch
                 {
-                    // Skip files that cannot be read
                 }
             }
 
             return count;
         }
 
-        /// <summary>
-        /// Apply selection filters to a candidate.
-        /// Collects ALL fail reasons (pipe-separated).
-        /// </summary>
         private void ApplyFilters(ProjectCandidate candidate)
         {
             var reasons = new List<string>();
@@ -443,9 +403,6 @@ namespace ThesisExperiment.Commands
             candidate.FailReasons = string.Join("|", reasons);
         }
 
-        /// <summary>
-        /// Write a list of records to a CSV file.
-        /// </summary>
         private void WriteCsv<T>(List<T> records, string filePath)
         {
             var directory = Path.GetDirectoryName(filePath);
