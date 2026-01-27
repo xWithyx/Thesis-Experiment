@@ -1,7 +1,9 @@
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
-namespace ThesisExperiment.Commands
+using ThesisExperiment.Models;
+
+namespace ThesisExperiment.Services
 {
     /// <summary>Parses Coverlet/Cobertura XML for method-level coverage.</summary>
     public class CoverletService

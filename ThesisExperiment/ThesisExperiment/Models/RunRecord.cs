@@ -1,6 +1,4 @@
-﻿using ThesisExperiment.Models;
-
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Models
 {
     /// <summary>Top-level experiment record written as JSON per method.</summary>
     public class RunRecord

@@ -2,7 +2,9 @@ using System.Diagnostics;
 using CliWrap;
 using CliWrap.Buffered;
 
-namespace ThesisExperiment.Commands
+using ThesisExperiment.Models;
+
+namespace ThesisExperiment.Services
 {
     /// <summary>Runs dotnet test with optional coverage and filtering.</summary>
     public class DotnetTestService

@@ -2,7 +2,7 @@ using System.ClientModel;
 using System.Text.RegularExpressions;
 using OpenAI.Chat;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Services
 {
     /// <summary>Response data from an OpenAI API call.</summary>
     public class OpenAiResult

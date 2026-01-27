@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Services
 {
     /// <summary>System and user message pair for LLM prompting.</summary>
     public class PromptPair

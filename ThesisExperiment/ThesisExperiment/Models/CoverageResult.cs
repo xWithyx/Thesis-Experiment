@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Models
 {
     /// <summary>Method-level line and branch coverage metrics.</summary>
     public class CoverageResult

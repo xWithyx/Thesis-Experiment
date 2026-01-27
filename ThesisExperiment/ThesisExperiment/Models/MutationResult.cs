@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Models
 {
     /// <summary>Method-level mutation testing metrics.</summary>
     public class MutationResult

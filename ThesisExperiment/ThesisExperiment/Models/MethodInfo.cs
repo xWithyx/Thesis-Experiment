@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Models
 {
     /// <summary>Focal method identification and location.</summary>
     public class MethodInfo

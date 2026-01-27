@@ -1,4 +1,4 @@
-﻿namespace ThesisExperiment.Commands
+﻿namespace ThesisExperiment.Models
 {
     /// <summary>LLM provider and configuration details.</summary>
     public class ModelInfo

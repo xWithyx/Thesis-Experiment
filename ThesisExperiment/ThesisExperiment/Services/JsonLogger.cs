@@ -2,7 +2,9 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ThesisExperiment.Commands
+using ThesisExperiment.Models;
+
+namespace ThesisExperiment.Services
 {
     /// <summary>Serializes RunRecords to JSON files.</summary>
     public class JsonLogger

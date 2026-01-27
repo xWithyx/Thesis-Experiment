@@ -2,7 +2,9 @@ using System.Diagnostics;
 using CliWrap;
 using CliWrap.Buffered;
 
-namespace ThesisExperiment.Commands
+using ThesisExperiment.Models;
+
+namespace ThesisExperiment.Services
 {
     /// <summary>Runs dotnet restore + build.</summary>
     public class DotnetBuildService

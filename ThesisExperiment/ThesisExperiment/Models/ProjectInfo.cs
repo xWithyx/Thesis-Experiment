@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Models
 {
     /// <summary>Project identification for a RunRecord.</summary>
     public class ProjectInfo

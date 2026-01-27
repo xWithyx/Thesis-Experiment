@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Text;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Services
 {
     /// <summary>Extracted method source code and context.</summary>
     public class ExtractionResult

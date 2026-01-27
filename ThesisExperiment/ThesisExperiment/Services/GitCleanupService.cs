@@ -1,7 +1,7 @@
 using CliWrap;
 using CliWrap.Buffered;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Services
 {
     /// <summary>Handles git clone, checkout, and clean operations.</summary>
     public class GitCleanupService

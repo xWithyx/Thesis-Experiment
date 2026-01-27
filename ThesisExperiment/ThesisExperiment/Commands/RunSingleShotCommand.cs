@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using ThesisExperiment.Models;
+using ThesisExperiment.Services;
 
 namespace ThesisExperiment.Commands
 {

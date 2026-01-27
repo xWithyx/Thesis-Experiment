@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace ThesisExperiment.Commands
+namespace ThesisExperiment.Services
 {
     /// <summary>Discovered test project metadata.</summary>
     public class TestProjectInfo

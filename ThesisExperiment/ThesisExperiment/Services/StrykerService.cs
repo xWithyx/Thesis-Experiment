@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 using CliWrap;
 using CliWrap.Buffered;
 
-namespace ThesisExperiment.Commands
+using ThesisExperiment.Models;
+
+namespace ThesisExperiment.Services
 {
     /// <summary>Runs Stryker.NET mutation testing and parses results.</summary>
     public class StrykerService

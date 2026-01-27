@@ -3,6 +3,7 @@ using CsvHelper.Configuration;
 using System.Globalization;
 using System.Text;
 using ThesisExperiment.Models;
+using ThesisExperiment.Services;
 
 namespace ThesisExperiment.Commands
 {
