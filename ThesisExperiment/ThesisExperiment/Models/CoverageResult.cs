@@ -14,5 +14,6 @@ namespace ThesisExperiment.Commands
         public int BranchCovered { get; set; }
         public int BranchTotal { get; set; }
         public double? BranchPercent { get; set; }
+        public string? Note { get; set; }
     }
 }
