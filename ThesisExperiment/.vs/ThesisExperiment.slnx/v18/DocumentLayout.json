@@ -7,12 +7,12 @@
       "RelativeMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|solutionrelative:thesisexperiment\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|c:\\users\\withy\\desktop\\beachlor\\software_test\\thesis-experiment\\thesisexperiment\\thesisexperiment\\commands\\selectprojectscommand.cs.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|solutionrelative:thesisexperiment\\commands\\selectprojectscommand.cs.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|c:\\users\\withy\\desktop\\beachlor\\software_test\\thesis-experiment\\thesisexperiment\\thesisexperiment\\models\\projectcandidate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|solutionrelative:thesisexperiment\\models\\projectcandidate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|c:\\users\\withy\\desktop\\beachlor\\software_test\\thesis-experiment\\thesisexperiment\\thesisexperiment\\packages.lock.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
-      "RelativeMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|solutionrelative:thesisexperiment\\packages.lock.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+      "AbsoluteMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|c:\\users\\withy\\desktop\\beachlor\\software_test\\thesis-experiment\\thesisexperiment\\thesisexperiment\\commands\\selectprojectscommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{3E666031-BA54-B2C2-DF75-A31581E930A6}|ThesisExperiment\\ThesisExperiment.csproj|solutionrelative:thesisexperiment\\commands\\selectprojectscommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -22,34 +22,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 2,
+          "SelectedChildIndex": 0,
           "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
-              "Title": "SelectProjectsCommand.cs.cs",
-              "DocumentMoniker": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Commands\\SelectProjectsCommand.cs.cs",
-              "RelativeDocumentMoniker": "ThesisExperiment\\Commands\\SelectProjectsCommand.cs.cs",
-              "ToolTip": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Commands\\SelectProjectsCommand.cs.cs",
-              "RelativeToolTip": "ThesisExperiment\\Commands\\SelectProjectsCommand.cs.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAuAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-26T19:23:06.019Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "packages.lock.json",
-              "DocumentMoniker": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\packages.lock.json",
-              "RelativeDocumentMoniker": "ThesisExperiment\\packages.lock.json",
-              "ToolTip": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\packages.lock.json",
-              "RelativeToolTip": "ThesisExperiment\\packages.lock.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
-              "WhenOpened": "2026-01-26T19:23:05.024Z",
-              "EditorCaption": ""
-            },
             {
               "$type": "Document",
               "DocumentIndex": 0,
@@ -58,9 +32,35 @@
               "RelativeDocumentMoniker": "ThesisExperiment\\Program.cs",
               "ToolTip": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Program.cs",
               "RelativeToolTip": "ThesisExperiment\\Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAADAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAnAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-26T19:17:21.154Z",
+              "WhenOpened": "2026-01-26T20:02:12.726Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ProjectCandidate.cs",
+              "DocumentMoniker": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Models\\ProjectCandidate.cs",
+              "RelativeDocumentMoniker": "ThesisExperiment\\Models\\ProjectCandidate.cs",
+              "ToolTip": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Models\\ProjectCandidate.cs",
+              "RelativeToolTip": "ThesisExperiment\\Models\\ProjectCandidate.cs",
+              "ViewState": "AgIAACYAAAAAAAAAAAAswBQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-26T20:02:03.018Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "SelectProjectsCommand.cs",
+              "DocumentMoniker": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Commands\\SelectProjectsCommand.cs",
+              "RelativeDocumentMoniker": "ThesisExperiment\\Commands\\SelectProjectsCommand.cs",
+              "ToolTip": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Commands\\SelectProjectsCommand.cs",
+              "RelativeToolTip": "ThesisExperiment\\Commands\\SelectProjectsCommand.cs",
+              "ViewState": "AgIAAI0BAAAAAAAAAAAUwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-01-26T20:01:42.359Z",
               "EditorCaption": ""
             }
           ]

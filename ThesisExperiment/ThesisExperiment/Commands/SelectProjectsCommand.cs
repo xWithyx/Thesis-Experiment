@@ -1,4 +1,4 @@
-﻿using CliWrap;
+using CliWrap;
 using CliWrap.Buffered;
 using CsvHelper;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,7 +12,6 @@ namespace ThesisExperiment.Commands
 {
     public class SelectProjectsCommand
     {
-
         private const int MinStars = 50;
         private const int MaxCandidates = 100;
         private const int MinPublicMethods = 10;
@@ -21,16 +20,30 @@ namespace ThesisExperiment.Commands
         private readonly GitHubClient _github;
         private readonly string _reposDir;
 
+        private record TestDetectionResult(bool HasTests, int TestProjectsCount, string TestFrameworks);
+
         public SelectProjectsCommand(string reposDirectory = "repos")
         {
             _github = new GitHubClient(new ProductHeaderValue("ThesisExperiment"));
-            _reposDir = reposDirectory;
 
+            var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+            if (!string.IsNullOrEmpty(token))
+            {
+                _github.Credentials = new Octokit.Credentials(token);
+                Console.WriteLine("Using authenticated GitHub access (GITHUB_TOKEN).");
+            }
+            else
+            {
+                Console.WriteLine("Warning: No GITHUB_TOKEN set. Using unauthenticated access (60 req/hr limit).");
+            }
+
+            _reposDir = reposDirectory;
             if (!Directory.Exists(_reposDir))
             {
                 Directory.CreateDirectory(_reposDir);
             }
         }
+
         /// <summary>
         /// Main entry point. Searches GitHub, evaluates projects, writes CSV files.
         /// </summary>
@@ -47,7 +60,7 @@ namespace ThesisExperiment.Commands
             for (int i = 0; i < repositories.Count; i++)
             {
                 var repo = repositories[i];
-                Console.WriteLine($"[{i + 1}/{repositories.Count}] Evaluating {repo.Name}...");
+                Console.WriteLine($"[{i + 1}/{repositories.Count}] Evaluating {repo.FullName}...");
 
                 try
                 {
@@ -61,8 +74,10 @@ namespace ThesisExperiment.Commands
                     {
                         RepoUrl = repo.HtmlUrl,
                         Name = repo.Name,
-                        Included = false,
-                        ExclusionReason = $"evaluation_error: {ex.Message}"
+                        Stars = repo.StargazersCount,
+                        DefaultBranch = repo.DefaultBranch ?? "unknown",
+                        PassedFilters = false,
+                        FailReasons = $"evaluation_error:{ex.Message}"
                     });
                 }
             }
@@ -70,7 +85,7 @@ namespace ThesisExperiment.Commands
             Console.WriteLine("Applying filters...");
             foreach (var candidate in candidates)
             {
-                if (string.IsNullOrEmpty(candidate.ExclusionReason))
+                if (string.IsNullOrEmpty(candidate.FailReasons))
                 {
                     ApplyFilters(candidate);
                 }
@@ -80,7 +95,7 @@ namespace ThesisExperiment.Commands
             WriteCsv(candidates, fullPath);
             Console.WriteLine($"Wrote full list to {fullPath}");
 
-            var filtered = candidates.Where(c => c.Included).ToList();
+            var filtered = candidates.Where(c => c.PassedFilters).ToList();
             var filteredPath = Path.Combine(outputPath, "project_list_filtered.csv");
             WriteCsv(filtered, filteredPath);
             Console.WriteLine($"Wrote filtered list to {filteredPath}");
@@ -88,7 +103,7 @@ namespace ThesisExperiment.Commands
             Console.WriteLine();
             Console.WriteLine("=== Summary ===");
             Console.WriteLine($"Total evaluated: {candidates.Count}");
-            Console.WriteLine($"Passed filters: {filtered.Count}");
+            Console.WriteLine($"Passed filters:  {filtered.Count}");
             Console.WriteLine();
             Console.WriteLine("IMPORTANT: Commit these CSV files now.");
             Console.WriteLine("They are frozen and must not change.");
@@ -96,20 +111,71 @@ namespace ThesisExperiment.Commands
 
         /// <summary>
         /// Search GitHub for C# repositories matching our criteria.
+        /// Excludes forks and archived repos.
         /// </summary>
         private async Task<List<Repository>> SearchGitHubRepositories()
         {
+            var allRepos = new List<Repository>();
+
             var request = new SearchRepositoriesRequest
             {
                 Language = Language.CSharp,
                 Stars = Octokit.Range.GreaterThan(MinStars),
                 SortField = RepoSearchSort.Stars,
-                Order = SortDirection.Descending
+                Order = SortDirection.Descending,
+                PerPage = 100,
+                Page = 1
             };
 
-            var result = await _github.Search.SearchRepo(request);
+            while (allRepos.Count < MaxCandidates)
+            {
+                await CheckRateLimit();
 
-            return result.Items.Take(MaxCandidates).ToList();
+                var result = await _github.Search.SearchRepo(request);
+                if (result.Items.Count == 0)
+                    break;
+
+                // Post-filter: exclude forks and archived repos
+                var valid = result.Items
+                    .Where(r => !r.Fork && !r.Archived)
+                    .ToList();
+
+                allRepos.AddRange(valid);
+
+                if (result.Items.Count < request.PerPage)
+                    break;
+
+                request.Page++;
+            }
+
+            return allRepos.Take(MaxCandidates).ToList();
+        }
+
+        /// <summary>
+        /// Check GitHub API rate limit and wait if necessary.
+        /// </summary>
+        private async Task CheckRateLimit()
+        {
+            var apiInfo = _github.GetLastApiInfo();
+            if (apiInfo?.RateLimit == null)
+                return;
+
+            var remaining = apiInfo.RateLimit.Remaining;
+            var reset = apiInfo.RateLimit.Reset;
+
+            if (remaining <= 1)
+            {
+                var waitTime = reset - DateTimeOffset.UtcNow;
+                if (waitTime > TimeSpan.Zero)
+                {
+                    Console.WriteLine($"  Rate limit nearly exhausted. Waiting {waitTime.TotalSeconds:F0}s until reset...");
+                    await Task.Delay(waitTime + TimeSpan.FromSeconds(2));
+                }
+            }
+            else if (remaining <= 5)
+            {
+                Console.WriteLine($"  Warning: Only {remaining} API requests remaining.");
+            }
         }
 
         /// <summary>
@@ -117,44 +183,46 @@ namespace ThesisExperiment.Commands
         /// </summary>
         private async Task<ProjectCandidate> EvaluateProject(Repository repo)
         {
+            var dirName = $"{repo.Owner.Login}__{repo.Name}";
+            var localPath = Path.Combine(_reposDir, dirName);
+
             var candidate = new ProjectCandidate
             {
                 RepoUrl = repo.HtmlUrl,
                 CloneUrl = repo.CloneUrl,
                 Name = repo.Name,
                 Stars = repo.StargazersCount,
-                License = repo.License?.Name ?? "Unknown",
-                Language = repo.Language ?? "Unknown",
-                LastCommit = repo.UpdatedAt.DateTime
+                DefaultBranch = repo.DefaultBranch ?? "main",
+                ClonePath = localPath
             };
 
-            var localPath = Path.Combine(_reposDir, repo.Name);
-            candidate.LocalPath = localPath;
-
-            Console.WriteLine($"  Cloning {repo.Name}...");
+            Console.WriteLine($"  Cloning {repo.FullName}...");
             await CloneRepository(repo.CloneUrl, localPath);
 
             candidate.CommitHash = await GetCurrentCommitHash(localPath);
             Console.WriteLine($"  Commit: {candidate.CommitHash}");
 
-            candidate.HasTests = HasTestProjects(localPath);
-            Console.WriteLine($"  Has tests: {candidate.HasTests}");
+            var testResult = DetectTestProjects(localPath);
+            candidate.HasTests = testResult.HasTests;
+            candidate.TestProjectsCount = testResult.TestProjectsCount;
+            candidate.TestFrameworks = testResult.TestFrameworks;
+            Console.WriteLine($"  Tests: {candidate.HasTests} ({candidate.TestProjectsCount} projects, frameworks: {candidate.TestFrameworks})");
 
-            Console.WriteLine($"  Building...");
-            candidate.Builds = await TryBuild(localPath);
-            Console.WriteLine($"  Builds: {candidate.Builds}");
+            Console.WriteLine($"  Building (Release)...");
+            candidate.BuildSuccess = await TryBuild(localPath);
+            Console.WriteLine($"  Build success: {candidate.BuildSuccess}");
 
             candidate.PublicMethodCount = CountPublicMethods(localPath);
             Console.WriteLine($"  Public methods: {candidate.PublicMethodCount}");
 
-            candidate.LinesOfCode = CountLinesOfCode(localPath);
-            Console.WriteLine($"  Lines of code: {candidate.LinesOfCode}");
+            candidate.LocCs = CountLinesOfCode(localPath);
+            Console.WriteLine($"  LOC (C#): {candidate.LocCs}");
 
             return candidate;
         }
 
         /// <summary>
-        /// Clone a Git repository to a local path.
+        /// Clone a Git repository to a local path (shallow clone).
         /// </summary>
         private async Task CloneRepository(string cloneUrl, string localPath)
         {
@@ -190,40 +258,59 @@ namespace ThesisExperiment.Commands
                 return "unknown";
             }
 
-            return result.StandardOutput.Trim().Substring(0, 12);
+            return result.StandardOutput.Trim();
         }
 
         /// <summary>
-        /// Check if the repository contains test projects.
+        /// Detect test projects: count them and identify frameworks.
         /// </summary>
-        private bool HasTestProjects(string localPath)
+        private TestDetectionResult DetectTestProjects(string localPath)
         {
             var csprojFiles = Directory.GetFiles(localPath, "*.csproj", SearchOption.AllDirectories);
+            int testProjectCount = 0;
+            var frameworksFound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var file in csprojFiles)
             {
                 var fileName = Path.GetFileName(file).ToLower();
+                var content = File.ReadAllText(file).ToLower();
+                bool isTestProject = false;
 
                 if (fileName.Contains("test") || fileName.Contains("tests"))
                 {
-                    return true;
+                    isTestProject = true;
                 }
 
-                var content = File.ReadAllText(file).ToLower();
-                if (content.Contains("xunit") ||
-                    content.Contains("nunit") ||
-                    content.Contains("mstest") ||
-                    content.Contains("microsoft.net.test.sdk"))
+                if (content.Contains("xunit"))
                 {
-                    return true;
+                    frameworksFound.Add("xunit");
+                    isTestProject = true;
                 }
+                if (content.Contains("nunit"))
+                {
+                    frameworksFound.Add("nunit");
+                    isTestProject = true;
+                }
+                if (content.Contains("mstest") || content.Contains("microsoft.visualstudio.testplatform"))
+                {
+                    frameworksFound.Add("mstest");
+                    isTestProject = true;
+                }
+                if (content.Contains("microsoft.net.test.sdk"))
+                {
+                    isTestProject = true;
+                }
+
+                if (isTestProject)
+                    testProjectCount++;
             }
 
-            return false;
+            var frameworks = string.Join(",", frameworksFound.OrderBy(f => f));
+            return new TestDetectionResult(testProjectCount > 0, testProjectCount, frameworks);
         }
 
         /// <summary>
-        /// Try to build the project with dotnet build.
+        /// Try to build the project with dotnet build (Release configuration).
         /// </summary>
         private async Task<bool> TryBuild(string localPath)
         {
@@ -239,7 +326,7 @@ namespace ThesisExperiment.Commands
             }
 
             var buildResult = await Cli.Wrap("dotnet")
-                .WithArguments("build --no-restore")
+                .WithArguments("build --no-restore -c Release")
                 .WithWorkingDirectory(localPath)
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
@@ -248,8 +335,20 @@ namespace ThesisExperiment.Commands
         }
 
         /// <summary>
-        /// Count public methods in C# files using Roslyn.
-        /// Excludes test files.
+        /// Check if a file path should be excluded from analysis.
+        /// Excludes test/spec directories and build output.
+        /// </summary>
+        private static bool ShouldExcludeFile(string filePath)
+        {
+            var normalized = filePath.Replace('\\', '/').ToLower();
+            return normalized.Contains("/test") ||
+                   normalized.Contains("/spec") ||
+                   normalized.Contains("/bin/") ||
+                   normalized.Contains("/obj/");
+        }
+
+        /// <summary>
+        /// Count public methods in C# production files using Roslyn.
         /// </summary>
         private int CountPublicMethods(string localPath)
         {
@@ -258,11 +357,8 @@ namespace ThesisExperiment.Commands
 
             foreach (var file in csFiles)
             {
-                var filePath = file.ToLower();
-                if (filePath.Contains("test") || filePath.Contains("spec"))
-                {
+                if (ShouldExcludeFile(file))
                     continue;
-                }
 
                 try
                 {
@@ -278,7 +374,7 @@ namespace ThesisExperiment.Commands
                 }
                 catch
                 {
-                    //TODO Skip files that cannot be parsed
+                    // Skip files that cannot be parsed
                 }
             }
 
@@ -286,8 +382,7 @@ namespace ThesisExperiment.Commands
         }
 
         /// <summary>
-        /// Count lines of code in C# files.
-        /// Excludes test files.
+        /// Count non-empty, non-comment lines in C# production files.
         /// </summary>
         private int CountLinesOfCode(string localPath)
         {
@@ -296,11 +391,8 @@ namespace ThesisExperiment.Commands
 
             foreach (var file in csFiles)
             {
-                var filePath = file.ToLower();
-                if (filePath.Contains("test") || filePath.Contains("spec"))
-                {
+                if (ShouldExcludeFile(file))
                     continue;
-                }
 
                 try
                 {
@@ -320,7 +412,7 @@ namespace ThesisExperiment.Commands
                 }
                 catch
                 {
-                    //TODO Skip files that cannot be read
+                    // Skip files that cannot be read
                 }
             }
 
@@ -329,40 +421,26 @@ namespace ThesisExperiment.Commands
 
         /// <summary>
         /// Apply selection filters to a candidate.
-        /// Sets Included to true or false and sets ExclusionReason if excluded.
+        /// Collects ALL fail reasons (pipe-separated).
         /// </summary>
         private void ApplyFilters(ProjectCandidate candidate)
         {
-            if (!candidate.Builds)
-            {
-                candidate.Included = false;
-                candidate.ExclusionReason = "build_failed";
-                return;
-            }
+            var reasons = new List<string>();
+
+            if (!candidate.BuildSuccess)
+                reasons.Add("build_failed");
 
             if (!candidate.HasTests)
-            {
-                candidate.Included = false;
-                candidate.ExclusionReason = "no_tests";
-                return;
-            }
+                reasons.Add("no_tests");
 
             if (candidate.PublicMethodCount < MinPublicMethods)
-            {
-                candidate.Included = false;
-                candidate.ExclusionReason = $"too_few_methods ({candidate.PublicMethodCount} < {MinPublicMethods})";
-                return;
-            }
+                reasons.Add($"too_few_methods({candidate.PublicMethodCount}<{MinPublicMethods})");
 
-            if (candidate.LinesOfCode < MinLinesOfCode)
-            {
-                candidate.Included = false;
-                candidate.ExclusionReason = $"too_small ({candidate.LinesOfCode} < {MinLinesOfCode})";
-                return;
-            }
+            if (candidate.LocCs < MinLinesOfCode)
+                reasons.Add($"loc_too_low({candidate.LocCs}<{MinLinesOfCode})");
 
-            candidate.Included = true;
-            candidate.ExclusionReason = string.Empty;
+            candidate.PassedFilters = reasons.Count == 0;
+            candidate.FailReasons = string.Join("|", reasons);
         }
 
         /// <summary>
