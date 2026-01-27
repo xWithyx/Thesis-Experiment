@@ -32,7 +32,7 @@
               "RelativeDocumentMoniker": "ThesisExperiment\\Program.cs",
               "ToolTip": "C:\\Users\\Withy\\Desktop\\Beachlor\\Software_Test\\Thesis-Experiment\\ThesisExperiment\\ThesisExperiment\\Program.cs",
               "RelativeToolTip": "ThesisExperiment\\Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABIAAAAnAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAACAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2026-01-26T20:02:12.726Z",
               "EditorCaption": ""
@@ -47,8 +47,7 @@
               "RelativeToolTip": "ThesisExperiment\\Models\\ProjectCandidate.cs",
               "ViewState": "AgIAACYAAAAAAAAAAAAswBQAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-26T20:02:03.018Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-01-26T20:02:03.018Z"
             },
             {
               "$type": "Document",
@@ -60,8 +59,7 @@
               "RelativeToolTip": "ThesisExperiment\\Commands\\SelectProjectsCommand.cs",
               "ViewState": "AgIAAI0BAAAAAAAAAAAUwAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2026-01-26T20:01:42.359Z",
-              "EditorCaption": ""
+              "WhenOpened": "2026-01-26T20:01:42.359Z"
             }
           ]
         }
