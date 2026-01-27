@@ -79,13 +79,42 @@ runSingleShotCommand.SetAction(async (parseResult, cancellationToken) =>
     await command.ExecuteAsync(output);
 });
 
+// --- run-repair-loop ---
+var repairOutputOption = new Option<string>("--output")
+{
+    Description = "Directory containing method_list_all.csv and project_list_selected.csv",
+    DefaultValueFactory = _ => "appendix"
+};
+
+var repairMaxAttemptsOption = new Option<int>("--max-attempts")
+{
+    Description = "Maximum number of attempts per method (1 initial + N-1 repairs)",
+    DefaultValueFactory = _ => 3
+};
+
+var runRepairLoopCommand = new Command("run-repair-loop",
+    "Generate tests with repair-loop LLM prompting (Variant C)")
+{
+    repairOutputOption,
+    repairMaxAttemptsOption
+};
+
+runRepairLoopCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var output = parseResult.GetValue(repairOutputOption)!;
+    var maxAttempts = parseResult.GetValue(repairMaxAttemptsOption);
+    var command = new RunRepairLoopCommand();
+    await command.ExecuteAsync(output, maxAttempts);
+});
+
 // --- root ---
 var rootCommand = new RootCommand("Thesis Experiment Tool")
 {
     selectProjectsCommand,
     sampleMethodsCommand,
     collectBaselineCommand,
-    runSingleShotCommand
+    runSingleShotCommand,
+    runRepairLoopCommand
 };
 
 return await rootCommand.Parse(args).InvokeAsync();
