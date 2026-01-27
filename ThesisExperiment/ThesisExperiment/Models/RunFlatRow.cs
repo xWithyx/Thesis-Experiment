@@ -66,9 +66,15 @@ namespace ThesisExperiment.Models
         public string TemplateVersion { get; set; } = string.Empty;
         public string TemplateFile { get; set; } = string.Empty;
 
-        // Error
+        // Error (original from RunRecord)
         public string ErrorCategory { get; set; } = string.Empty;
         public string ErrorSubcategory { get; set; } = string.Empty;
+
+        // Error labels (assigned by LabelErrorsCommand)
+        public string ErrorCategoryLabeled { get; set; } = string.Empty;
+        public string ErrorSubcategoryLabeled { get; set; } = string.Empty;
+        public string LabelVersion { get; set; } = string.Empty;
+        public string PrimaryErrorCode { get; set; } = string.Empty;
 
         // Timestamps
         public DateTime TimestampStart { get; set; }

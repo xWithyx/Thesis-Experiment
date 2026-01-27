@@ -135,6 +135,34 @@ aggregateResultsCommand.SetAction(async (parseResult, cancellationToken) =>
     await command.ExecuteAsync(runsDir, output);
 });
 
+// --- label-errors ---
+var labelRunsOption = new Option<string>("--runs")
+{
+    Description = "Directory containing RunRecord JSON files",
+    DefaultValueFactory = _ => "runs"
+};
+
+var labelOutputOption = new Option<string>("--output")
+{
+    Description = "Output directory for labeled CSV and report files",
+    DefaultValueFactory = _ => "appendix"
+};
+
+var labelErrorsCommand = new Command("label-errors",
+    "Label RunRecord errors with standardised categories and subcategories")
+{
+    labelRunsOption,
+    labelOutputOption
+};
+
+labelErrorsCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var runsDir = parseResult.GetValue(labelRunsOption)!;
+    var output = parseResult.GetValue(labelOutputOption)!;
+    var command = new LabelErrorsCommand();
+    await command.ExecuteAsync(runsDir, output);
+});
+
 // --- root ---
 var rootCommand = new RootCommand("Thesis Experiment Tool")
 {
@@ -143,7 +171,8 @@ var rootCommand = new RootCommand("Thesis Experiment Tool")
     collectBaselineCommand,
     runSingleShotCommand,
     runRepairLoopCommand,
-    aggregateResultsCommand
+    aggregateResultsCommand,
+    labelErrorsCommand
 };
 
 return await rootCommand.Parse(args).InvokeAsync();
