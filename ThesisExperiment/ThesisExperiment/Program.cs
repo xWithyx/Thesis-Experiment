@@ -1,6 +1,31 @@
 using System.CommandLine;
 using ThesisExperiment.Commands;
 
+// --- Load .env file if present (keys are NOT overwritten if already set) ---
+var envPath = Path.Combine(AppContext.BaseDirectory, ".env");
+if (!File.Exists(envPath))
+    envPath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+
+if (File.Exists(envPath))
+{
+    foreach (var line in File.ReadAllLines(envPath))
+    {
+        var trimmed = line.Trim();
+        if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+            continue;
+
+        var separatorIndex = trimmed.IndexOf('=');
+        if (separatorIndex <= 0)
+            continue;
+
+        var key = trimmed[..separatorIndex].Trim();
+        var value = trimmed[(separatorIndex + 1)..].Trim();
+
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+            Environment.SetEnvironmentVariable(key, value);
+    }
+}
+
 // --- select-projects ---
 var selectOutputOption = new Option<string>("--output")
 {

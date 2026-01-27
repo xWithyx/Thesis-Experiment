@@ -6,6 +6,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+		<!-- Exclude cloned repos and runtime dirs from implicit MSBuild item discovery -->
+		<DefaultItemExcludes>$(DefaultItemExcludes);repos\**;runs\**;results\**</DefaultItemExcludes>
 	</PropertyGroup>
 
 	<ItemGroup>
