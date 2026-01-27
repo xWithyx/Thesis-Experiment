@@ -107,6 +107,34 @@ runRepairLoopCommand.SetAction(async (parseResult, cancellationToken) =>
     await command.ExecuteAsync(output, maxAttempts);
 });
 
+// --- aggregate-results ---
+var aggregateRunsOption = new Option<string>("--runs")
+{
+    Description = "Directory containing RunRecord JSON files",
+    DefaultValueFactory = _ => "runs"
+};
+
+var aggregateOutputOption = new Option<string>("--output")
+{
+    Description = "Output directory for aggregated CSV and report files",
+    DefaultValueFactory = _ => "appendix"
+};
+
+var aggregateResultsCommand = new Command("aggregate-results",
+    "Aggregate RunRecord JSONs into flat CSV and summary files")
+{
+    aggregateRunsOption,
+    aggregateOutputOption
+};
+
+aggregateResultsCommand.SetAction(async (parseResult, cancellationToken) =>
+{
+    var runsDir = parseResult.GetValue(aggregateRunsOption)!;
+    var output = parseResult.GetValue(aggregateOutputOption)!;
+    var command = new AggregateResultsCommand();
+    await command.ExecuteAsync(runsDir, output);
+});
+
 // --- root ---
 var rootCommand = new RootCommand("Thesis Experiment Tool")
 {
@@ -114,7 +142,8 @@ var rootCommand = new RootCommand("Thesis Experiment Tool")
     sampleMethodsCommand,
     collectBaselineCommand,
     runSingleShotCommand,
-    runRepairLoopCommand
+    runRepairLoopCommand,
+    aggregateResultsCommand
 };
 
 return await rootCommand.Parse(args).InvokeAsync();
