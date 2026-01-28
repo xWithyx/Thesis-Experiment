@@ -26,7 +26,7 @@ namespace ThesisExperiment.Commands
         private const string RunsDir = "runs";
 
         /// <summary>Orchestrates repair-loop generation for all 50 focal methods.</summary>
-        public async Task ExecuteAsync(string dataDir, int maxAttempts = 3, int? limit = null)
+        public async Task ExecuteAsync(string dataDir, int maxAttempts = 3, int? limit = null, int? skip = null)
         {
             Console.WriteLine($"=== Step 8: Run Repair Loop (Variant C, max {maxAttempts} attempts) ===\n");
 
@@ -34,6 +34,12 @@ namespace ThesisExperiment.Commands
             Console.WriteLine($"Reading methods from {methodsPath}...");
             var methods = ReadCsv<SampledMethod>(methodsPath);
             Console.WriteLine($"Loaded {methods.Count} methods.");
+
+            if (skip.HasValue && skip.Value > 0)
+            {
+                methods = methods.Skip(skip.Value).ToList();
+                Console.WriteLine($"  (--skip {skip.Value}: Skipped first {skip.Value} method(s), {methods.Count} remaining)");
+            }
 
             if (limit.HasValue && limit.Value > 0)
             {
@@ -388,8 +394,8 @@ namespace ThesisExperiment.Commands
 
                 // Stable pass: collect coverage + mutation
                 Console.WriteLine("    Parsing coverage...");
-                var coverage = CollectCoverage(repoPath, method, coverageDir);
-                Console.WriteLine($"    Coverage: {coverage.LinePercent}% line, {coverage.BranchPercent}% branch");
+                var coverage = CollectCoverage(repoPath, method, coverageDir, gate2Result.Stdout);
+                Console.WriteLine($"    Coverage: {coverage.LinePercent}% line, {coverage.BranchPercent}% branch (status: {coverage.Status})");
 
                 Console.WriteLine("    Running Stryker mutation testing...");
                 var cacheKey = $"{projectName}::{commitHash}::{method.FilePath}";
@@ -575,11 +581,11 @@ namespace ThesisExperiment.Commands
         }
 
         /// <summary>Parses Coverlet/Cobertura coverage for the focal method.</summary>
-        private CoverageResult CollectCoverage(string repoPath, SampledMethod method, string coverageDir)
+        private CoverageResult CollectCoverage(string repoPath, SampledMethod method, string coverageDir, string? testStdout)
         {
             var coberturaFiles = _coverletService.FindCoberturaFiles(coverageDir);
             return _coverletService.ParseMethodCoverage(
-                coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath);
+                coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath, testStdout);
         }
 
         /// <summary>Runs Stryker mutation testing for the focal method's source file.</summary>

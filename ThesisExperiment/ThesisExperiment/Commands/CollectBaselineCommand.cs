@@ -18,12 +18,18 @@ namespace ThesisExperiment.Commands
         private readonly JsonLogger _jsonLogger = new();
 
         /// <summary>Builds, tests, collects coverage and mutation for each method.</summary>
-        public async Task ExecuteAsync(string outputPath, int? limit = null)
+        public async Task ExecuteAsync(string outputPath, int? limit = null, int? skip = null)
         {
             var methodsPath = Path.Combine(outputPath, "method_list_all.csv");
             Console.WriteLine($"Reading methods from {methodsPath}...");
             var methods = ReadCsv<SampledMethod>(methodsPath);
             Console.WriteLine($"Loaded {methods.Count} methods.");
+
+            if (skip.HasValue && skip.Value > 0)
+            {
+                methods = methods.Skip(skip.Value).ToList();
+                Console.WriteLine($"  (--skip {skip.Value}: Skipped first {skip.Value} method(s), {methods.Count} remaining)");
+            }
 
             if (limit.HasValue && limit.Value > 0)
             {
@@ -128,8 +134,9 @@ namespace ThesisExperiment.Commands
                 foreach (var method in projectMethods)
                 {
                     var coverage = _coverletService.ParseMethodCoverage(
-                        coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath);
-                    if (!testPassed)
+                        coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath,
+                        testResult.Stdout);
+                    if (!testPassed && coverage.Status == "available")
                         coverage.Note = "collected from failing test run";
 
                     strykerResults.TryGetValue(method.FilePath, out var fileResult);

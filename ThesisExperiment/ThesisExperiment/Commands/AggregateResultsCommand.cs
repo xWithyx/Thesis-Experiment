@@ -133,6 +133,7 @@ namespace ThesisExperiment.Commands
                 FlakinessRunResults = string.Join("|", r.Flakiness.RunResults ?? new List<string>()),
 
                 // Coverage
+                CoverageStatus = r.Coverage.Status,
                 CoverageLinePercent = r.Coverage.LinePercent,
                 CoverageBranchPercent = r.Coverage.BranchPercent,
 

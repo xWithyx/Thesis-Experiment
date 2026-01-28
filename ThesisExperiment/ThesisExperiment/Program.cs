@@ -76,19 +76,26 @@ var baselineLimitOption = new Option<int?>("--limit")
     Description = "Process only the first N methods (for dry-run testing)"
 };
 
+var baselineSkipOption = new Option<int?>("--skip")
+{
+    Description = "Skip the first N methods before applying --limit"
+};
+
 var collectBaselineCommand = new Command("collect-baseline",
     "Measure existing tests for all 50 focal methods (Variant A baseline)")
 {
     baselineDataDirOption,
-    baselineLimitOption
+    baselineLimitOption,
+    baselineSkipOption
 };
 
 collectBaselineCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var output = parseResult.GetValue(baselineDataDirOption)!;
     var limit = parseResult.GetValue(baselineLimitOption);
+    var skip = parseResult.GetValue(baselineSkipOption);
     var command = new CollectBaselineCommand();
-    await command.ExecuteAsync(output, limit);
+    await command.ExecuteAsync(output, limit, skip);
 });
 
 // --- run-single-shot ---
@@ -103,19 +110,26 @@ var singleShotLimitOption = new Option<int?>("--limit")
     Description = "Process only the first N methods (for dry-run testing)"
 };
 
+var singleShotSkipOption = new Option<int?>("--skip")
+{
+    Description = "Skip the first N methods before applying --limit"
+};
+
 var runSingleShotCommand = new Command("run-single-shot",
     "Generate tests with single-shot LLM prompting (Variant B)")
 {
     singleShotOutputOption,
-    singleShotLimitOption
+    singleShotLimitOption,
+    singleShotSkipOption
 };
 
 runSingleShotCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var output = parseResult.GetValue(singleShotOutputOption)!;
     var limit = parseResult.GetValue(singleShotLimitOption);
+    var skip = parseResult.GetValue(singleShotSkipOption);
     var command = new RunSingleShotCommand();
-    await command.ExecuteAsync(output, limit);
+    await command.ExecuteAsync(output, limit, skip);
 });
 
 // --- run-repair-loop ---
@@ -136,12 +150,18 @@ var repairLimitOption = new Option<int?>("--limit")
     Description = "Process only the first N methods (for dry-run testing)"
 };
 
+var repairSkipOption = new Option<int?>("--skip")
+{
+    Description = "Skip the first N methods before applying --limit"
+};
+
 var runRepairLoopCommand = new Command("run-repair-loop",
     "Generate tests with repair-loop LLM prompting (Variant C)")
 {
     repairOutputOption,
     repairMaxAttemptsOption,
-    repairLimitOption
+    repairLimitOption,
+    repairSkipOption
 };
 
 runRepairLoopCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -149,8 +169,9 @@ runRepairLoopCommand.SetAction(async (parseResult, cancellationToken) =>
     var output = parseResult.GetValue(repairOutputOption)!;
     var maxAttempts = parseResult.GetValue(repairMaxAttemptsOption);
     var limit = parseResult.GetValue(repairLimitOption);
+    var skip = parseResult.GetValue(repairSkipOption);
     var command = new RunRepairLoopCommand();
-    await command.ExecuteAsync(output, maxAttempts, limit);
+    await command.ExecuteAsync(output, maxAttempts, limit, skip);
 });
 
 // --- aggregate-results ---

@@ -18,14 +18,62 @@ namespace ThesisExperiment.Services
                 SearchOption.AllDirectories).ToList();
         }
 
+        /// <summary>
+        /// Checks if the XPlat Code Coverage collector is missing based on test output.
+        /// Returns true if messages like "Data collector...not found" or
+        /// "Datensammler...nicht gefunden" are detected.
+        /// </summary>
+        public bool IsCollectorMissing(string testStdout)
+        {
+            if (string.IsNullOrEmpty(testStdout))
+                return false;
+
+            // English: "Data collector 'XPlat Code Coverage' was not found"
+            // German: "Datensammler 'XPlat Code Coverage' wurde nicht gefunden"
+            var lower = testStdout.ToLowerInvariant();
+            return lower.Contains("data collector") && lower.Contains("not found")
+                || lower.Contains("datensammler") && lower.Contains("nicht gefunden");
+        }
+
         /// <summary>Computes line and branch coverage for a method's line range.</summary>
+        /// <param name="coberturaFiles">List of coverage XML files to parse.</param>
+        /// <param name="methodFilePath">Relative path to the source file containing the method.</param>
+        /// <param name="lineStart">First line of the method.</param>
+        /// <param name="lineEnd">Last line of the method.</param>
+        /// <param name="repoRootPath">Root path of the repository.</param>
+        /// <param name="testStdout">Test output to check for collector missing messages.</param>
         public CoverageResult ParseMethodCoverage(
             List<string> coberturaFiles,
             string methodFilePath,
             int lineStart,
             int lineEnd,
-            string repoRootPath)
+            string repoRootPath,
+            string? testStdout = null)
         {
+            // Check if collector is missing
+            if (testStdout != null && IsCollectorMissing(testStdout))
+            {
+                return new CoverageResult
+                {
+                    Status = "collector_missing",
+                    Tool = "coverlet",
+                    Scope = "method",
+                    Note = "XPlat Code Coverage collector not installed in project"
+                };
+            }
+
+            // Collector present but no reports generated
+            if (coberturaFiles.Count == 0)
+            {
+                return new CoverageResult
+                {
+                    Status = "no_report",
+                    Tool = "coverlet",
+                    Scope = "method",
+                    Note = "No coverage report generated (test abort, path issue, or tool error)"
+                };
+            }
+
             var normalizedMethodPath = methodFilePath.Replace('\\', '/');
 
             var absoluteCandidate = Path.Combine(repoRootPath, methodFilePath)
@@ -115,6 +163,7 @@ namespace ThesisExperiment.Services
 
             return new CoverageResult
             {
+                Status = "available",
                 Tool = "coverlet",
                 Scope = "method",
                 LineCovered = coveredLines,

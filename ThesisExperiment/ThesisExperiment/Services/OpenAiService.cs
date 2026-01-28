@@ -29,7 +29,7 @@ namespace ThesisExperiment.Services
                     "Environment variable OPENAI_API_KEY is not set. " +
                     "Set it before running: set OPENAI_API_KEY=sk-...");
 
-            _chatClient = new ChatClient(model: "gpt-3.5-turbo", apiKey: apiKey);
+            _chatClient = new ChatClient(model: "gpt-5-mini", apiKey: apiKey);
         }
 
         /// <summary>Sends system+user messages to GPT and returns the result.</summary>

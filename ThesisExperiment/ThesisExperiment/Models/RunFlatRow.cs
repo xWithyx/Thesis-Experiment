@@ -38,6 +38,7 @@ namespace ThesisExperiment.Models
         public string FlakinessRunResults { get; set; } = string.Empty;
 
         // Coverage
+        public string CoverageStatus { get; set; } = string.Empty;
         public double? CoverageLinePercent { get; set; }
         public double? CoverageBranchPercent { get; set; }
 

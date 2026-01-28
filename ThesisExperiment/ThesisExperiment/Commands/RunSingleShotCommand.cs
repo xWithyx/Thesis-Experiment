@@ -26,7 +26,7 @@ namespace ThesisExperiment.Commands
         private const string RunsDir = "runs";
 
         /// <summary>Orchestrates single-shot generation for all 50 focal methods.</summary>
-        public async Task ExecuteAsync(string dataDir, int? limit = null)
+        public async Task ExecuteAsync(string dataDir, int? limit = null, int? skip = null)
         {
             Console.WriteLine("=== Step 7: Run Single-Shot (Variant B) ===\n");
 
@@ -34,6 +34,12 @@ namespace ThesisExperiment.Commands
             Console.WriteLine($"Reading methods from {methodsPath}...");
             var methods = ReadCsv<SampledMethod>(methodsPath);
             Console.WriteLine($"Loaded {methods.Count} methods.");
+
+            if (skip.HasValue && skip.Value > 0)
+            {
+                methods = methods.Skip(skip.Value).ToList();
+                Console.WriteLine($"  (--skip {skip.Value}: Skipped first {skip.Value} method(s), {methods.Count} remaining)");
+            }
 
             if (limit.HasValue && limit.Value > 0)
             {
@@ -282,8 +288,9 @@ namespace ThesisExperiment.Commands
             Console.WriteLine("    Parsing coverage...");
             var coberturaFiles = _coverletService.FindCoberturaFiles(coverageDir);
             var coverage = _coverletService.ParseMethodCoverage(
-                coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath);
-            Console.WriteLine($"    Coverage: {coverage.LinePercent}% line, {coverage.BranchPercent}% branch");
+                coberturaFiles, method.FilePath, method.LineStart, method.LineEnd, repoPath,
+                testResult.Stdout);
+            Console.WriteLine($"    Coverage: {coverage.LinePercent}% line, {coverage.BranchPercent}% branch (status: {coverage.Status})");
 
             Console.WriteLine("    Running Stryker mutation testing...");
             var cacheKey = $"{projectName}::{commitHash}::{method.FilePath}";
