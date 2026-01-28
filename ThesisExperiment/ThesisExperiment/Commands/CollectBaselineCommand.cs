@@ -18,12 +18,18 @@ namespace ThesisExperiment.Commands
         private readonly JsonLogger _jsonLogger = new();
 
         /// <summary>Builds, tests, collects coverage and mutation for each method.</summary>
-        public async Task ExecuteAsync(string outputPath)
+        public async Task ExecuteAsync(string outputPath, int? limit = null)
         {
             var methodsPath = Path.Combine(outputPath, "method_list_all.csv");
             Console.WriteLine($"Reading methods from {methodsPath}...");
             var methods = ReadCsv<SampledMethod>(methodsPath);
             Console.WriteLine($"Loaded {methods.Count} methods.");
+
+            if (limit.HasValue && limit.Value > 0)
+            {
+                methods = methods.Take(limit.Value).ToList();
+                Console.WriteLine($"  (--limit {limit.Value}: Processing only first {methods.Count} method(s))");
+            }
 
             var selectedPath = Path.Combine(outputPath, "project_list_selected.csv");
             var projectStarsMap = new Dictionary<string, int>();

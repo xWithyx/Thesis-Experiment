@@ -26,14 +26,20 @@ namespace ThesisExperiment.Commands
         private const string RunsDir = "runs";
 
         /// <summary>Orchestrates repair-loop generation for all 50 focal methods.</summary>
-        public async Task ExecuteAsync(string dataDir, int maxAttempts = 3)
+        public async Task ExecuteAsync(string dataDir, int maxAttempts = 3, int? limit = null)
         {
-            Console.WriteLine($"=== Step 6: Run Repair Loop (Variant C, max {maxAttempts} attempts) ===\n");
+            Console.WriteLine($"=== Step 8: Run Repair Loop (Variant C, max {maxAttempts} attempts) ===\n");
 
             var methodsPath = Path.Combine(dataDir, "method_list_all.csv");
             Console.WriteLine($"Reading methods from {methodsPath}...");
             var methods = ReadCsv<SampledMethod>(methodsPath);
             Console.WriteLine($"Loaded {methods.Count} methods.");
+
+            if (limit.HasValue && limit.Value > 0)
+            {
+                methods = methods.Take(limit.Value).ToList();
+                Console.WriteLine($"  (--limit {limit.Value}: Processing only first {methods.Count} method(s))");
+            }
 
             var selectedPath = Path.Combine(dataDir, "project_list_selected.csv");
             var projectStarsMap = new Dictionary<string, int>();

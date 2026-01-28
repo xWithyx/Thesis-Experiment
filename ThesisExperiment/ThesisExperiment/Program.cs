@@ -71,17 +71,24 @@ var baselineDataDirOption = new Option<string>("--data-dir")
     DefaultValueFactory = _ => "appendix"
 };
 
+var baselineLimitOption = new Option<int?>("--limit")
+{
+    Description = "Process only the first N methods (for dry-run testing)"
+};
+
 var collectBaselineCommand = new Command("collect-baseline",
     "Measure existing tests for all 50 focal methods (Variant A baseline)")
 {
-    baselineDataDirOption
+    baselineDataDirOption,
+    baselineLimitOption
 };
 
 collectBaselineCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var output = parseResult.GetValue(baselineDataDirOption)!;
+    var limit = parseResult.GetValue(baselineLimitOption);
     var command = new CollectBaselineCommand();
-    await command.ExecuteAsync(output);
+    await command.ExecuteAsync(output, limit);
 });
 
 // --- run-single-shot ---
@@ -91,17 +98,24 @@ var singleShotOutputOption = new Option<string>("--output")
     DefaultValueFactory = _ => "appendix"
 };
 
+var singleShotLimitOption = new Option<int?>("--limit")
+{
+    Description = "Process only the first N methods (for dry-run testing)"
+};
+
 var runSingleShotCommand = new Command("run-single-shot",
     "Generate tests with single-shot LLM prompting (Variant B)")
 {
-    singleShotOutputOption
+    singleShotOutputOption,
+    singleShotLimitOption
 };
 
 runSingleShotCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var output = parseResult.GetValue(singleShotOutputOption)!;
+    var limit = parseResult.GetValue(singleShotLimitOption);
     var command = new RunSingleShotCommand();
-    await command.ExecuteAsync(output);
+    await command.ExecuteAsync(output, limit);
 });
 
 // --- run-repair-loop ---
@@ -117,19 +131,26 @@ var repairMaxAttemptsOption = new Option<int>("--max-attempts")
     DefaultValueFactory = _ => 3
 };
 
+var repairLimitOption = new Option<int?>("--limit")
+{
+    Description = "Process only the first N methods (for dry-run testing)"
+};
+
 var runRepairLoopCommand = new Command("run-repair-loop",
     "Generate tests with repair-loop LLM prompting (Variant C)")
 {
     repairOutputOption,
-    repairMaxAttemptsOption
+    repairMaxAttemptsOption,
+    repairLimitOption
 };
 
 runRepairLoopCommand.SetAction(async (parseResult, cancellationToken) =>
 {
     var output = parseResult.GetValue(repairOutputOption)!;
     var maxAttempts = parseResult.GetValue(repairMaxAttemptsOption);
+    var limit = parseResult.GetValue(repairLimitOption);
     var command = new RunRepairLoopCommand();
-    await command.ExecuteAsync(output, maxAttempts);
+    await command.ExecuteAsync(output, maxAttempts, limit);
 });
 
 // --- aggregate-results ---

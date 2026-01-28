@@ -17,7 +17,9 @@ namespace ThesisExperiment.Services
         {
             var sw = Stopwatch.StartNew();
 
-            var coverageDir = Path.Combine(workingDirectory, "coverage-results");
+            // Use absolute path to avoid dotnet test resolving relative paths incorrectly
+            var absoluteWorkingDir = Path.GetFullPath(workingDirectory);
+            var coverageDir = Path.Combine(absoluteWorkingDir, "coverage-results");
 
             if (Directory.Exists(coverageDir))
                 Directory.Delete(coverageDir, recursive: true);
@@ -38,7 +40,7 @@ namespace ThesisExperiment.Services
 
             var result = await Cli.Wrap("dotnet")
                 .WithArguments(args)
-                .WithWorkingDirectory(workingDirectory)
+                .WithWorkingDirectory(absoluteWorkingDir)
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
 
@@ -63,6 +65,9 @@ namespace ThesisExperiment.Services
         {
             var sw = Stopwatch.StartNew();
 
+            // Use absolute path for consistency
+            var absoluteWorkingDir = Path.GetFullPath(workingDirectory);
+
             var args = new List<string> { "test", "--no-build" };
 
             if (!string.IsNullOrEmpty(filter))
@@ -73,7 +78,7 @@ namespace ThesisExperiment.Services
 
             var result = await Cli.Wrap("dotnet")
                 .WithArguments(args)
-                .WithWorkingDirectory(workingDirectory)
+                .WithWorkingDirectory(absoluteWorkingDir)
                 .WithValidation(CommandResultValidation.None)
                 .ExecuteBufferedAsync();
 
