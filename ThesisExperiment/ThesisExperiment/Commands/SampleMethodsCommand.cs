@@ -39,18 +39,19 @@ namespace ThesisExperiment.Commands
             Console.WriteLine($"Selecting {ProjectCount} projects (sort by repo_url, shuffle seed {Seed})...");
             var sorted = filteredProjects.OrderBy(p => p.RepoUrl, StringComparer.Ordinal).ToList();
             Shuffle(sorted, Seed);
-            var selected = sorted.Take(ProjectCount).ToList();
 
-            Console.WriteLine("Selected projects:");
-            foreach (var p in selected)
-                Console.WriteLine($"  - {p.RepoUrl}");
-
+            // Fix 1: Iterate through ALL shuffled projects until 5 valid ones are found
+            var validProjects = new List<ProjectCandidate>();
             var allMethods = new List<SampledMethod>();
+            int candidateIndex = 0;
 
-            for (int i = 0; i < selected.Count; i++)
+            foreach (var project in sorted)
             {
-                var project = selected[i];
-                Console.WriteLine($"\n[{i + 1}/{selected.Count}] Processing {project.RepoUrl}...");
+                if (validProjects.Count >= ProjectCount)
+                    break;
+
+                candidateIndex++;
+                Console.WriteLine($"\n[Candidate {candidateIndex}/{sorted.Count}] Processing {project.RepoUrl}...");
 
                 if (!Directory.Exists(project.ClonePath))
                 {
@@ -59,9 +60,29 @@ namespace ThesisExperiment.Commands
                     await CloneRepository(cloneUrl, project.ClonePath);
                 }
 
-                var commitHash = await GetCommitHash(project.ClonePath);
-                project.CommitHash = commitHash;
-                Console.WriteLine($"  Commit: {commitHash}");
+                // Fix 2: CSV Commit Hash als Source of Truth
+                string commitHash;
+                if (!string.IsNullOrEmpty(project.CommitHash) && project.CommitHash != "unknown")
+                {
+                    commitHash = project.CommitHash;
+                    var currentHead = await GetCommitHash(project.ClonePath);
+
+                    if (currentHead != commitHash)
+                    {
+                        Console.WriteLine($"  HEAD ({currentHead[..8]}) differs from CSV ({commitHash[..8]}), checking out...");
+                        await EnsureCommitAvailable(project.ClonePath, commitHash);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"  Commit: {commitHash[..8]} (matches CSV)");
+                    }
+                }
+                else
+                {
+                    commitHash = await GetCommitHash(project.ClonePath);
+                    project.CommitHash = commitHash;
+                    Console.WriteLine($"  Commit (from HEAD, no CSV value): {commitHash[..8]}");
+                }
 
                 var projectName = project.RepoUrl.Split('/').Last();
 
@@ -71,7 +92,7 @@ namespace ThesisExperiment.Commands
 
                 if (methods.Count < MethodsPerProject)
                 {
-                    Console.WriteLine($"  WARNING: Only {methods.Count} methods found, need {MethodsPerProject}. Project skipped.");
+                    Console.WriteLine($"  SKIPPED: Only {methods.Count} methods, need {MethodsPerProject}. Trying next candidate...");
                     continue;
                 }
 
@@ -79,42 +100,58 @@ namespace ThesisExperiment.Commands
                 Shuffle(sortedMethods, Seed);
                 var sampled = sortedMethods.Take(MethodsPerProject).ToList();
 
-                Console.WriteLine($"  Sampled {sampled.Count} methods:");
+                Console.WriteLine($"  ACCEPTED: Sampled {sampled.Count} methods:");
                 foreach (var m in sampled)
                     Console.WriteLine($"    - {m.Identifier} ({m.FilePath}:{m.LineStart}-{m.LineEnd})");
 
+                validProjects.Add(project);
                 allMethods.AddRange(sampled);
             }
 
+            if (validProjects.Count < ProjectCount)
+            {
+                Console.WriteLine($"\nERROR: Only {validProjects.Count} valid projects found out of {sorted.Count} candidates.");
+                Console.WriteLine($"Need at least {ProjectCount} projects with {MethodsPerProject}+ methods each.");
+                return;
+            }
+
+            Console.WriteLine($"\n=== Selected {validProjects.Count} Projects ===");
+            foreach (var p in validProjects)
+                Console.WriteLine($"  - {p.RepoUrl}");
+
             var selectedPath = Path.Combine(outputPath, "project_list_selected.csv");
-            WriteCsv(selected, selectedPath);
-            Console.WriteLine($"\nWrote {selected.Count} projects to {selectedPath}");
+            WriteCsv(validProjects, selectedPath);
+            Console.WriteLine($"\nWrote {validProjects.Count} projects to {selectedPath}");
 
             var methodsPath = Path.Combine(outputPath, "method_list_all.csv");
             WriteCsv(allMethods, methodsPath);
             Console.WriteLine($"Wrote {allMethods.Count} methods to {methodsPath}");
 
             Console.WriteLine("\n=== Validation ===");
-            Console.WriteLine($"Projects selected: {selected.Count} (expected: {ProjectCount})");
+            Console.WriteLine($"Projects selected: {validProjects.Count} (expected: {ProjectCount})");
             Console.WriteLine($"Methods sampled:   {allMethods.Count} (expected: {ProjectCount * MethodsPerProject})");
 
             var grouped = allMethods.GroupBy(m => m.ProjectName).ToList();
             foreach (var g in grouped)
                 Console.WriteLine($"  {g.Key}: {g.Count()} methods");
 
-            var duplicates = allMethods.GroupBy(m => m.Identifier).Where(g => g.Count() > 1).ToList();
+            // Fix 3: Duplicate Check auf (RepoUrl, Identifier) statt nur Identifier
+            var duplicates = allMethods
+                .GroupBy(m => (m.RepoUrl, m.Identifier))
+                .Where(g => g.Count() > 1)
+                .ToList();
             if (duplicates.Count > 0)
             {
                 Console.WriteLine($"WARNING: {duplicates.Count} duplicate identifiers found!");
                 foreach (var d in duplicates)
-                    Console.WriteLine($"  Duplicate: {d.Key}");
+                    Console.WriteLine($"  Duplicate: {d.Key.Identifier} in {d.Key.RepoUrl}");
             }
             else
             {
                 Console.WriteLine("No duplicate identifiers. OK");
             }
 
-            if (allMethods.Count == ProjectCount * MethodsPerProject && duplicates.Count == 0)
+            if (validProjects.Count == ProjectCount && allMethods.Count == ProjectCount * MethodsPerProject && duplicates.Count == 0)
                 Console.WriteLine("\nAll validation checks passed.");
             else
                 Console.WriteLine("\nWARNING: Some validation checks failed. Review output above.");
@@ -236,13 +273,34 @@ namespace ThesisExperiment.Commands
 
         private static bool ShouldExcludeFile(string filePath)
         {
-            var normalized = filePath.Replace('\\', '/').ToLower();
-            return normalized.Contains("/bin/") ||
-                   normalized.Contains("/obj/") ||
-                   normalized.Contains("/test") ||
-                   normalized.Contains("/spec") ||
-                   normalized.Contains("/generated/") ||
-                   normalized.Contains("/migrations/");
+            var normalized = filePath.Replace('\\', '/');
+            var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var seg in segments)
+            {
+                var s = seg.ToLowerInvariant();
+
+                // Standard excludes
+                if (s is "bin" or "obj" or "generated" or "migrations")
+                    return true;
+
+                // Robust test detection: unittest, *.tests, *tests, *.test, *test
+                if (s.Contains("unittest") ||
+                    s.EndsWith("tests") ||
+                    s.EndsWith("test") ||
+                    s.Contains(".tests") ||
+                    s.Contains(".test"))
+                    return true;
+
+                // Spec detection
+                if (s is "spec" or "specs" ||
+                    s.EndsWith("spec") ||
+                    s.EndsWith("specs") ||
+                    s.Contains(".spec"))
+                    return true;
+            }
+
+            return false;
         }
 
         private static void Shuffle<T>(List<T> list, int seed)
@@ -281,6 +339,39 @@ namespace ThesisExperiment.Commands
             return result.ExitCode == 0
                 ? result.StandardOutput.Trim()
                 : "unknown";
+        }
+
+        private async Task EnsureCommitAvailable(string localPath, string commitHash)
+        {
+            // Check if commit is already available locally
+            var checkResult = await Cli.Wrap("git")
+                .WithArguments($"cat-file -t {commitHash}")
+                .WithWorkingDirectory(localPath)
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+
+            if (checkResult.ExitCode != 0)
+            {
+                // Commit not available in shallow clone → need to fetch full history
+                Console.WriteLine($"  Fetching full history (commit not in shallow clone)...");
+                await Cli.Wrap("git")
+                    .WithArguments("fetch --unshallow")
+                    .WithWorkingDirectory(localPath)
+                    .WithValidation(CommandResultValidation.None)
+                    .ExecuteBufferedAsync();
+            }
+
+            // Checkout the specific commit
+            var result = await Cli.Wrap("git")
+                .WithArguments($"checkout  --detach {commitHash}")
+                .WithWorkingDirectory(localPath)
+                .WithValidation(CommandResultValidation.None)
+                .ExecuteBufferedAsync();
+
+            if (result.ExitCode == 0)
+                Console.WriteLine($"  Checked out {commitHash[..8]} successfully.");
+            else
+                throw new Exception($"Failed to checkout {commitHash}: {result.StandardError}");
         }
 
         private List<T> ReadCsv<T>(string filePath)

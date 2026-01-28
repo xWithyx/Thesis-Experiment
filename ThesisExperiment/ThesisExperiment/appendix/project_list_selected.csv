@@ -1,0 +1,6 @@
+﻿repo_url,stars,default_branch,commit_hash,clone_path,build_success,has_tests,test_projects_count,test_frameworks,public_method_count,loc_cs,passed_filters,fail_reasons
+https://github.com/duplicati/duplicati,14109,master,05d9457f364fcdeb9165dd1dff755bef8f8d629b,repos\duplicati__duplicati,True,True,6,"mstest,nunit",3588,114983,True,
+https://github.com/LuckyPennySoftware/MediatR,11831,main,be61f5a415965bf81893a05b25e0c4936079f35c,repos\LuckyPennySoftware__MediatR,True,True,2,xunit,106,3083,True,
+https://github.com/App-vNext/Polly,14104,main,3fb78e0c769998aa5ed7c5e4f0584ad1627709f7,repos\App-vNext__Polly,True,True,9,xunit,1218,22509,True,
+https://github.com/Kareadita/Kavita,9723,develop,0987bf8951be2b10ac4de1f33634129442d39cc1,repos\Kareadita__Kavita,True,True,2,xunit,3248,386694,True,
+https://github.com/Cysharp/UniTask,10438,master,73a63b7f672b88f7e9992f6917eb458a8cbb6fa9,repos\Cysharp__UniTask,True,True,1,xunit,2649,66483,True,
