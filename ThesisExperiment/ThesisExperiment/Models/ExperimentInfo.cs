@@ -12,5 +12,9 @@ namespace ThesisExperiment.Models
         public int MaxAttempts { get; set; }
         public string PromptVersion { get; set; } = string.Empty;
         public string PromptFile { get; set; } = string.Empty;
+        /// <summary>Repair policy version for Variant C (e.g. "RP-1.0").</summary>
+        public string RepairPolicyVersion { get; set; } = string.Empty;
+        /// <summary>RunId of the source Variant B record (for traceability).</summary>
+        public string SourceVariantBRunId { get; set; } = string.Empty;
     }
 }

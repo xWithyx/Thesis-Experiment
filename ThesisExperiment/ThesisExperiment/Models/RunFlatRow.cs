@@ -7,6 +7,8 @@ namespace ThesisExperiment.Models
         public string Variant { get; set; } = string.Empty;
         public int AttemptNumber { get; set; }
         public int MaxAttempts { get; set; }
+        public string RepairPolicyVersion { get; set; } = string.Empty;
+        public string SourceVariantBRunId { get; set; } = string.Empty;
 
         // Project
         public string ProjectName { get; set; } = string.Empty;
@@ -27,6 +29,8 @@ namespace ThesisExperiment.Models
         public string StopReason { get; set; } = string.Empty;
         public bool Gate1BuildPassed { get; set; }
         public bool Gate2TestPassed { get; set; }
+        public string FailureClass { get; set; } = string.Empty;
+        public string SuccessLevel { get; set; } = string.Empty;
 
         // Build & Test
         public int BuildExitCode { get; set; }

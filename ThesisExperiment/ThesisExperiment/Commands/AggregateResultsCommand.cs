@@ -102,6 +102,8 @@ namespace ThesisExperiment.Commands
                 Variant = r.Experiment.Variant,
                 AttemptNumber = r.Experiment.AttemptNumber,
                 MaxAttempts = r.Experiment.MaxAttempts,
+                RepairPolicyVersion = r.Experiment.RepairPolicyVersion,
+                SourceVariantBRunId = r.Experiment.SourceVariantBRunId,
 
                 // Project
                 ProjectName = r.Project.Name,
@@ -122,6 +124,8 @@ namespace ThesisExperiment.Commands
                 StopReason = r.Outcome.StopReason,
                 Gate1BuildPassed = r.Outcome.Gate1BuildPassed,
                 Gate2TestPassed = r.Outcome.Gate2TestPassed,
+                FailureClass = r.Outcome.FailureClass,
+                SuccessLevel = r.Outcome.SuccessLevel,
 
                 // Build & Test
                 BuildExitCode = r.Build.ExitCode,
