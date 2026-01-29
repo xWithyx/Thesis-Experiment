@@ -294,10 +294,11 @@ namespace ThesisExperiment.Commands
 
             Console.WriteLine("    Running Stryker mutation testing...");
             var cacheKey = $"{projectName}::{commitHash}::{method.FilePath}";
-            StrykerService.StrykerFileResult? strykerResult = null;
+            StrykerService.StrykerFileResult? strykerFileResult = null;
+            string strykerStatus = "error";
             try
             {
-                strykerResult = await _strykerService.RunStrykerForFileAsync(
+                (strykerFileResult, strykerStatus) = await _strykerService.RunStrykerForFileAsync(
                     repoPath, method.FilePath, cacheKey);
             }
             catch (Exception ex)
@@ -306,8 +307,8 @@ namespace ThesisExperiment.Commands
             }
 
             var mutation = _strykerService.ExtractMethodMutation(
-                strykerResult, method.FilePath, method.LineStart, method.LineEnd);
-            Console.WriteLine($"    Mutation: {mutation.MutationScore}% ({mutation.MutantsKilled}/{mutation.MutantsTotal})");
+                strykerFileResult, strykerStatus, method.FilePath, method.LineStart, method.LineEnd);
+            Console.WriteLine($"    Mutation: {mutation.MutationScore}% ({mutation.MutantsKilled}/{mutation.MutantsTotal}) [status: {mutation.Status}]");
 
             return BuildRecord(timestampStart, projectName, method, repoUrl, commitHash, starsMap,
                 finalStatus: "completed", stopReason: "completed",

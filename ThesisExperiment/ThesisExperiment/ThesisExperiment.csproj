@@ -12,6 +12,7 @@
 
 	<ItemGroup>
 		<Content Include="prompts\**\*" CopyToOutputDirectory="PreserveNewest" />
+		<Content Include="test.runsettings" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 
 	<ItemGroup>

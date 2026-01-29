@@ -10,6 +10,33 @@ namespace ThesisExperiment.Services
     public class DotnetTestService
     {
         private const int MaxOutputLength = 10_000;
+        private readonly string? _runsettingsPath;
+
+        public DotnetTestService()
+        {
+            // Find test.runsettings relative to the executable location
+            var appDir = AppContext.BaseDirectory;
+            var runsettings = Path.Combine(appDir, "test.runsettings");
+
+            // Also check project directory (for development)
+            if (!File.Exists(runsettings))
+            {
+                var projectDir = Path.GetDirectoryName(
+                    Path.GetDirectoryName(
+                        Path.GetDirectoryName(
+                            Path.GetDirectoryName(appDir))));
+                if (projectDir != null)
+                {
+                    runsettings = Path.Combine(projectDir, "test.runsettings");
+                }
+            }
+
+            _runsettingsPath = File.Exists(runsettings) ? runsettings : null;
+            if (_runsettingsPath != null)
+            {
+                Console.WriteLine($"Using runsettings: {_runsettingsPath}");
+            }
+        }
 
         /// <summary>Runs tests with XPlat Code Coverage collection.</summary>
         public async Task<(TestResult TestResult, string CoverageDir)> RunTestsWithCoverageAsync(
@@ -32,6 +59,12 @@ namespace ThesisExperiment.Services
                 $"--results-directory:{coverageDir}"
             };
 
+            if (_runsettingsPath != null)
+            {
+                args.Add("--settings");
+                args.Add(_runsettingsPath);
+            }
+
             if (!string.IsNullOrEmpty(filter))
             {
                 args.Add("--filter");
@@ -47,9 +80,10 @@ namespace ThesisExperiment.Services
             sw.Stop();
 
             var filterSuffix = filter != null ? $" --filter \"{filter}\"" : "";
+            var settingsSuffix = _runsettingsPath != null ? " --settings test.runsettings" : "";
             var testResult = new TestResult
             {
-                Command = $"dotnet test --no-build --collect:\"XPlat Code Coverage\"{filterSuffix}",
+                Command = $"dotnet test --no-build --collect:\"XPlat Code Coverage\"{settingsSuffix}{filterSuffix}",
                 ExitCode = result.ExitCode,
                 Stdout = Truncate(result.StandardOutput),
                 Stderr = Truncate(result.StandardError),
@@ -70,6 +104,12 @@ namespace ThesisExperiment.Services
 
             var args = new List<string> { "test", "--no-build" };
 
+            if (_runsettingsPath != null)
+            {
+                args.Add("--settings");
+                args.Add(_runsettingsPath);
+            }
+
             if (!string.IsNullOrEmpty(filter))
             {
                 args.Add("--filter");
@@ -85,9 +125,10 @@ namespace ThesisExperiment.Services
             sw.Stop();
 
             var filterSuffix = filter != null ? $" --filter \"{filter}\"" : "";
+            var settingsSuffix = _runsettingsPath != null ? " --settings test.runsettings" : "";
             return new TestResult
             {
-                Command = $"dotnet test --no-build{filterSuffix}",
+                Command = $"dotnet test --no-build{settingsSuffix}{filterSuffix}",
                 ExitCode = result.ExitCode,
                 Stdout = Truncate(result.StandardOutput),
                 Stderr = Truncate(result.StandardError),

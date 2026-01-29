@@ -112,7 +112,7 @@ namespace ThesisExperiment.Commands
                     .ToList();
                 Console.WriteLine($"  Running Stryker for {uniqueFiles.Count} unique source file(s)...");
 
-                var strykerResults = new Dictionary<string, StrykerService.StrykerFileResult?>(
+                var strykerResults = new Dictionary<string, (StrykerService.StrykerFileResult? FileResult, string Status)>(
                     StringComparer.OrdinalIgnoreCase);
                 foreach (var file in uniqueFiles)
                 {
@@ -126,7 +126,7 @@ namespace ThesisExperiment.Commands
                     catch (Exception ex)
                     {
                         Console.WriteLine($"    Stryker failed for {file}: {ex.Message}");
-                        strykerResults[file] = null;
+                        strykerResults[file] = (null, "error");
                     }
                 }
 
@@ -139,9 +139,10 @@ namespace ThesisExperiment.Commands
                     if (!testPassed && coverage.Status == "available")
                         coverage.Note = "collected from failing test run";
 
-                    strykerResults.TryGetValue(method.FilePath, out var fileResult);
+                    strykerResults.TryGetValue(method.FilePath, out var strykerResult);
                     var mutation = _strykerService.ExtractMethodMutation(
-                        fileResult, method.FilePath, method.LineStart, method.LineEnd);
+                        strykerResult.FileResult, strykerResult.Status,
+                        method.FilePath, method.LineStart, method.LineEnd);
 
                     var record = BuildRunRecord(
                         projectName, method, repoUrl, commitHash, projectStarsMap,

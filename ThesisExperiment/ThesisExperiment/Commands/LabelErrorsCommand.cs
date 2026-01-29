@@ -392,10 +392,12 @@ namespace ThesisExperiment.Commands
                 FlakinessRunResults = string.Join("|", r.Flakiness.RunResults ?? new List<string>()),
 
                 // Coverage
+                CoverageStatus = r.Coverage.Status,
                 CoverageLinePercent = r.Coverage.LinePercent,
                 CoverageBranchPercent = r.Coverage.BranchPercent,
 
                 // Mutation
+                MutationStatus = r.Mutation.Status,
                 MutationScore = r.Mutation.MutationScore,
                 MutantsKilled = r.Mutation.MutantsKilled,
                 MutantsSurvived = r.Mutation.MutantsSurvived,

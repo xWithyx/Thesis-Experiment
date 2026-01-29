@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <EnvironmentVariables>
+      <!-- Force en-US locale for consistent test behavior across systems -->
+      <LANG>en_US.UTF-8</LANG>
+      <LC_ALL>en_US.UTF-8</LC_ALL>
+      <DOTNET_CLI_UI_LANGUAGE>en</DOTNET_CLI_UI_LANGUAGE>
+    </EnvironmentVariables>
+    <ResultsDirectory>.\TestResults</ResultsDirectory>
+  </RunConfiguration>
+</RunSettings>

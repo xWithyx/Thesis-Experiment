@@ -1,0 +1,6 @@
+﻿ProjectName,Variant,TotalRuns,Completed,BuildFailed,TestFailed,FlakyFailure,AvgCoverageLinePercent,AvgMutationScore,AvgTokensUsed
+duplicati,A,10,0,0,10,0,,,0
+Kavita,A,10,0,0,0,0,,,0
+MediatR,A,10,0,0,0,0,,,0
+Polly,A,10,0,0,10,0,,,0
+UniTask,A,10,0,0,0,0,,,0

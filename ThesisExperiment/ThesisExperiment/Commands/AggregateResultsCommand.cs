@@ -138,6 +138,7 @@ namespace ThesisExperiment.Commands
                 CoverageBranchPercent = r.Coverage.BranchPercent,
 
                 // Mutation
+                MutationStatus = r.Mutation.Status,
                 MutationScore = r.Mutation.MutationScore,
                 MutantsKilled = r.Mutation.MutantsKilled,
                 MutantsSurvived = r.Mutation.MutantsSurvived,

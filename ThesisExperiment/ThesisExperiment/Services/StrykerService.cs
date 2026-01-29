@@ -17,32 +17,99 @@ namespace ThesisExperiment.Services
             PropertyNameCaseInsensitive = true
         };
 
+        private const int MaxConsecutiveTimeouts = 2;
+
         private readonly Dictionary<string, StrykerFileResult?> _cache = new();
+        private readonly HashSet<string> _toolRestoredRepos = new();
+        private readonly Dictionary<string, int> _consecutiveTimeouts = new();
+        private readonly HashSet<string> _budgetExceededRepos = new();
 
         /// <summary>Runs Stryker for a source file (cached per key).</summary>
-        public async Task<StrykerFileResult?> RunStrykerForFileAsync(
+        /// <returns>Tuple of (file result, execution status: "available", "timeout", "skipped_budget", "error")</returns>
+        public async Task<(StrykerFileResult? FileResult, string Status)> RunStrykerForFileAsync(
             string workingDirectory, string sourceFilePath, string cacheKey)
         {
-            if (_cache.TryGetValue(cacheKey, out var cached))
-                return cached;
+            // Check if budget exceeded for this repo
+            if (_budgetExceededRepos.Contains(workingDirectory))
+            {
+                Console.WriteLine($"    Stryker skipped (budget exceeded after {MaxConsecutiveTimeouts} consecutive timeouts)");
+                return (null, "skipped_budget");
+            }
 
-            var result = await ExecuteStrykerAsync(workingDirectory, sourceFilePath);
+            if (_cache.TryGetValue(cacheKey, out var cached))
+            {
+                // Reset timeout counter on cache hit (successful previous run)
+                _consecutiveTimeouts[workingDirectory] = 0;
+                return (cached, "available");
+            }
+
+            var (result, status) = await ExecuteStrykerWithStatusAsync(workingDirectory, sourceFilePath);
+
+            // Track consecutive timeouts
+            if (status == "timeout")
+            {
+                _consecutiveTimeouts.TryGetValue(workingDirectory, out var count);
+                count++;
+                _consecutiveTimeouts[workingDirectory] = count;
+
+                if (count >= MaxConsecutiveTimeouts)
+                {
+                    Console.WriteLine($"    Budget limit reached: {count} consecutive timeouts for this repo");
+                    _budgetExceededRepos.Add(workingDirectory);
+                }
+            }
+            else if (status == "available")
+            {
+                // Reset counter on success
+                _consecutiveTimeouts[workingDirectory] = 0;
+            }
+
             _cache[cacheKey] = result;
-            return result;
+            return (result, status);
         }
 
         /// <summary>Extracts mutation score for a specific method's line range.</summary>
+        /// <param name="fileResult">Stryker file result (can be null)</param>
+        /// <param name="executionStatus">Execution status from RunStrykerForFileAsync</param>
+        /// <param name="sourceFilePath">Source file path</param>
+        /// <param name="lineStart">Method start line</param>
+        /// <param name="lineEnd">Method end line</param>
         public MutationResult ExtractMethodMutation(
-            StrykerFileResult? fileResult, string sourceFilePath, int lineStart, int lineEnd)
+            StrykerFileResult? fileResult, string executionStatus,
+            string sourceFilePath, int lineStart, int lineEnd)
         {
+            // Handle non-available statuses
+            if (executionStatus != "available")
+            {
+                var note = executionStatus switch
+                {
+                    "timeout" => "Stryker timed out",
+                    "skipped_budget" => $"Skipped after {MaxConsecutiveTimeouts} consecutive timeouts for this repo",
+                    "error" => "Stryker encountered an error",
+                    _ => $"Stryker status: {executionStatus}"
+                };
+
+                return new MutationResult
+                {
+                    Status = executionStatus,
+                    Tool = "stryker",
+                    Scope = "method",
+                    ScopedTo = sourceFilePath,
+                    MutationScore = null,
+                    Note = note
+                };
+            }
+
             if (fileResult == null)
             {
                 return new MutationResult
                 {
+                    Status = "error",
                     Tool = "stryker",
                     Scope = "method",
                     ScopedTo = sourceFilePath,
-                    MutationScore = null
+                    MutationScore = null,
+                    Note = "No Stryker result available"
                 };
             }
 
@@ -55,10 +122,12 @@ namespace ThesisExperiment.Services
             {
                 return new MutationResult
                 {
+                    Status = "not_in_scope",
                     Tool = "stryker",
                     Scope = "method",
                     ScopedTo = sourceFilePath,
-                    MutationScore = null
+                    MutationScore = null,
+                    Note = "File not found in Stryker report"
                 };
             }
 
@@ -79,6 +148,7 @@ namespace ThesisExperiment.Services
 
             return new MutationResult
             {
+                Status = "available",
                 Tool = "stryker",
                 Scope = "method",
                 ScopedTo = $"{sourceFilePath}:{lineStart}-{lineEnd}",
@@ -89,7 +159,74 @@ namespace ThesisExperiment.Services
             };
         }
 
-        private async Task<StrykerFileResult?> ExecuteStrykerAsync(
+        /// <summary>Runs dotnet tool restore if .config/dotnet-tools.json exists (once per repo).</summary>
+        private async Task EnsureToolRestoreAsync(string workingDirectory)
+        {
+            // Skip if already restored for this repo
+            if (_toolRestoredRepos.Contains(workingDirectory))
+                return;
+
+            var toolsManifest = Path.Combine(workingDirectory, ".config", "dotnet-tools.json");
+            if (!File.Exists(toolsManifest))
+            {
+                _toolRestoredRepos.Add(workingDirectory);
+                return;
+            }
+
+            Console.WriteLine("    Running dotnet tool restore...");
+            try
+            {
+                var result = await Cli.Wrap("dotnet")
+                    .WithArguments(new[] { "tool", "restore" })
+                    .WithWorkingDirectory(workingDirectory)
+                    .WithValidation(CommandResultValidation.None)
+                    .ExecuteBufferedAsync();
+
+                if (result.ExitCode == 0)
+                {
+                    Console.WriteLine("    Tool restore completed.");
+                }
+                else
+                {
+                    Console.WriteLine($"    Tool restore exited with code {result.ExitCode} (continuing anyway)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"    Tool restore failed: {ex.Message} (continuing anyway)");
+            }
+
+            _toolRestoredRepos.Add(workingDirectory);
+        }
+
+        private async Task<(StrykerFileResult? Result, string Status)> ExecuteStrykerWithStatusAsync(
+            string workingDirectory, string sourceFilePath)
+        {
+            // Ensure dotnet tools are restored (once per repo)
+            await EnsureToolRestoreAsync(workingDirectory);
+
+            // Initial delay to allow file handles to be released after tests
+            await Task.Delay(2000);
+
+            var (result, status, errorMessage) = await TryExecuteStrykerAsync(workingDirectory, sourceFilePath);
+
+            // Retry once if file lock error
+            if (status == "error" && IsFileLockError(errorMessage))
+            {
+                Console.WriteLine("    File lock detected, attempting recovery...");
+
+                // Shutdown build server to release locks
+                await ShutdownBuildServerAsync(workingDirectory);
+                await Task.Delay(2000);
+
+                // Retry
+                (result, status, _) = await TryExecuteStrykerAsync(workingDirectory, sourceFilePath);
+            }
+
+            return (result, status);
+        }
+
+        private async Task<(StrykerFileResult? Result, string Status, string? ErrorMessage)> TryExecuteStrykerAsync(
             string workingDirectory, string sourceFilePath)
         {
             var strykerOutputDir = Path.Combine(workingDirectory, "StrykerOutput");
@@ -131,21 +268,43 @@ namespace ThesisExperiment.Services
                 {
                     Console.WriteLine($"    Stryker exited with code {result.ExitCode}");
                     Console.WriteLine($"    stderr: {Truncate(result.StandardError, 500)}");
-                    return null;
+                    return (null, "error", result.StandardError);
                 }
 
-                return ParseLatestReport(workingDirectory);
+                var report = ParseLatestReport(workingDirectory);
+                return (report, report != null ? "available" : "error", null);
             }
             catch (OperationCanceledException)
             {
                 Console.WriteLine($"    Stryker timed out after {Timeout.TotalMinutes} minutes for {sourceFilePath}");
-                return null;
+                return (null, "timeout", null);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"    Stryker error: {ex.Message}");
-                return null;
+                return (null, "error", ex.Message);
             }
+        }
+
+        private static bool IsFileLockError(string? errorMessage)
+        {
+            if (string.IsNullOrEmpty(errorMessage)) return false;
+            return errorMessage.Contains("being used by another process", StringComparison.OrdinalIgnoreCase)
+                || errorMessage.Contains("cannot access the file", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task ShutdownBuildServerAsync(string workingDirectory)
+        {
+            try
+            {
+                Console.WriteLine("    Running dotnet build-server shutdown...");
+                await Cli.Wrap("dotnet")
+                    .WithArguments(new[] { "build-server", "shutdown" })
+                    .WithWorkingDirectory(workingDirectory)
+                    .WithValidation(CommandResultValidation.None)
+                    .ExecuteAsync();
+            }
+            catch { /* Ignore errors */ }
         }
 
         private StrykerFileResult? ParseLatestReport(string workingDirectory)

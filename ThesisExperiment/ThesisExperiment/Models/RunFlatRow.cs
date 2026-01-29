@@ -43,6 +43,7 @@ namespace ThesisExperiment.Models
         public double? CoverageBranchPercent { get; set; }
 
         // Mutation
+        public string MutationStatus { get; set; } = string.Empty;
         public double? MutationScore { get; set; }
         public int MutantsKilled { get; set; }
         public int MutantsSurvived { get; set; }

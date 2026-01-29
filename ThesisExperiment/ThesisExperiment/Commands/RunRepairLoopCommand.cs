@@ -400,7 +400,7 @@ namespace ThesisExperiment.Commands
                 Console.WriteLine("    Running Stryker mutation testing...");
                 var cacheKey = $"{projectName}::{commitHash}::{method.FilePath}";
                 var mutation = await CollectMutationAsync(repoPath, method, cacheKey);
-                Console.WriteLine($"    Mutation: {mutation.MutationScore}% ({mutation.MutantsKilled}/{mutation.MutantsTotal})");
+                Console.WriteLine($"    Mutation: {mutation.MutationScore}% ({mutation.MutantsKilled}/{mutation.MutantsTotal}) [status: {mutation.Status}]");
 
                 return BuildRecord(timestampStart, projectName, method, repoUrl, commitHash, starsMap,
                     maxAttempts: maxAttempts, attemptNumber: attempt,
@@ -594,15 +594,15 @@ namespace ThesisExperiment.Commands
         {
             try
             {
-                var fileResult = await _strykerService.RunStrykerForFileAsync(
+                var (fileResult, status) = await _strykerService.RunStrykerForFileAsync(
                     repoPath, method.FilePath, cacheKey);
                 return _strykerService.ExtractMethodMutation(
-                    fileResult, method.FilePath, method.LineStart, method.LineEnd);
+                    fileResult, status, method.FilePath, method.LineStart, method.LineEnd);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"    Stryker failed: {ex.Message}");
-                return new MutationResult();
+                return new MutationResult { Status = "error", Note = ex.Message };
             }
         }
 
