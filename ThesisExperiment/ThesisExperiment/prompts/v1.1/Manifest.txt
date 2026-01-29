@@ -1,0 +1,27 @@
+Prompt Template Manifest
+========================
+Version:  v1.1
+Date:     2026-01-29
+Status:   FROZEN (do not modify - create v1.2 for changes)
+
+Changes since v1.0:
+1. Enforced exactly one csharp code block output.
+2. Required minimal compilable file (using statements and test class).
+3. Forbidden assuming extra mocking or assertion libraries.
+4. Clarified temp file rules and allowed Guid only for isolation.
+5. Repair prompt now enforces minimal changes and explicit repair priorities.
+
+Files:
+  single_shot.txt    — Single shot test generation (Variant B)
+  repair_attempt.txt — Repair loop iteration (Variant C)
+
+Placeholders:
+  {{TEST_FRAMEWORK}}   — xUnit | NUnit | MSTest (auto detected per project)
+  {{TEST_ATTRIBUTE}}   — Fact | Test | TestMethod (matches framework)
+  {{NAMESPACE}}        — Namespace of the focal class
+  {{CLASS_NAME}}       — Name of the focal class
+  {{SIGNATURE}}        — Full method signature
+  {{METHOD_BODY}}      — Source code of the focal method
+  {{CLASS_CONTEXT}}    — Other methods and fields in the class
+  {{PREVIOUS_TEST}}    — Previous test code (repair_attempt.txt only)
+  {{ERROR_MESSAGE}}    — Build or test error output (repair_attempt.txt only)

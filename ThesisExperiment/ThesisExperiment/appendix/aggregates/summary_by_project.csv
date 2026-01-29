@@ -1,6 +1,11 @@
 ﻿ProjectName,Variant,TotalRuns,Completed,BuildFailed,TestFailed,FlakyFailure,AvgCoverageLinePercent,AvgMutationScore,AvgTokensUsed
 duplicati,A,10,0,0,10,0,,,0
+duplicati,B,10,0,10,0,0,,,1952
 Kavita,A,10,0,0,0,0,,,0
+Kavita,B,11,5,5,1,0,0,0,2410
 MediatR,A,10,0,0,0,0,,,0
+MediatR,B,11,2,9,0,0,0,0,1375
 Polly,A,10,0,0,10,0,,,0
+Polly,B,11,0,10,1,0,,,2072
 UniTask,A,10,0,0,0,0,,,0
+UniTask,B,11,0,0,0,0,,,0

@@ -1,2 +1,3 @@
 ﻿Variant,TotalRuns,CompletedCount,BuildFailedCount,TestFailedCount,FlakyFailureCount,ApiErrorCount,LlmInvalidOutputCount,CloneFailedCount,NoTestProjectCount,BuildPassRate,TestPassRate,StablePassRate,AvgCoverageLinePercent,AvgCoverageBranchPercent,AvgMutationScore,AvgTokensUsed,SumTokensUsed
 A,50,0,0,20,0,0,0,0,0,100,60,0,,,,0,0
+B,54,7,34,2,0,0,0,0,11,16.67,12.96,12.96,0,0,0,1555,83961

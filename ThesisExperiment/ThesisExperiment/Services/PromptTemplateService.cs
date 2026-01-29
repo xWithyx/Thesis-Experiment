@@ -13,14 +13,14 @@ namespace ThesisExperiment.Services
     public class PromptTemplateService
     {
         private static readonly string SingleShotTemplatePath =
-            Path.Combine(AppContext.BaseDirectory, "prompts", "v1.0", "single_shot.txt");
+            Path.Combine(AppContext.BaseDirectory, "prompts", "v1.1", "single_shot.txt");
         private static readonly string RepairTemplatePath =
-            Path.Combine(AppContext.BaseDirectory, "prompts", "v1.0", "repair_attempt.txt");
+            Path.Combine(AppContext.BaseDirectory, "prompts", "v1.1", "repair_attempt.txt");
 
-        public string TemplateVersion => "v1.0";
+        public string TemplateVersion => "v1.1";
 
-        public string SingleShotTemplateFile => "prompts/v1.0/single_shot.txt";
-        public string RepairTemplateFile => "prompts/v1.0/repair_attempt.txt";
+        public string SingleShotTemplateFile => "prompts/v1.1/single_shot.txt";
+        public string RepairTemplateFile => "prompts/v1.1/repair_attempt.txt";
 
         /// <summary>Builds a single-shot test generation prompt.</summary>
         public PromptPair BuildSingleShotPrompt(

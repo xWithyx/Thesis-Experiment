@@ -1,3 +1,7 @@
 ﻿Variant,FinalStatus,Count
 A,baseline_complete,30
 A,test_failed,20
+B,build_failed,34
+B,completed,7
+B,no_test_project,11
+B,test_failed,2

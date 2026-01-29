@@ -42,11 +42,15 @@ namespace ThesisExperiment.Services
                 new UserChatMessage(userMessage)
             };
 
+#pragma warning disable OPENAI001 // Experimental API
             var options = new ChatCompletionOptions
             {
-                Temperature = 0.2f,
-                MaxOutputTokenCount = 2048
+                // Note: GPT-5-mini only supports temperature=1.0 (default)
+                MaxOutputTokenCount = 4096,
+                // GPT-5-mini defaults to reasoning mode - set to low to get text output
+                ReasoningEffortLevel = ChatReasoningEffortLevel.Low
             };
+#pragma warning restore OPENAI001
 
             ClientResult<ChatCompletion> result =
                 await _chatClient.CompleteChatAsync(messages, options);

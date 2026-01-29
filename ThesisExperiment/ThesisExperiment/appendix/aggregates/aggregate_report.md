@@ -1,6 +1,6 @@
 ﻿# Aggregate Report
 
-Generated: 2026-01-28 22:10:26 UTC
+Generated: 2026-01-29 09:11:46 UTC
 
 ## Files Generated
 
@@ -11,25 +11,30 @@ Generated: 2026-01-28 22:10:26 UTC
 
 ## Overview
 
-- Total JSON files parsed: **50** (failed: 0)
-- Total runs: **50**
+- Total JSON files parsed: **104** (failed: 0)
+- Total runs: **104**
   - Variant A: 50 runs
+  - Variant B: 54 runs
 
 ## Pass Rates by Variant
 
 | Variant | Total | Completed | Build Pass % | Test Pass % | Stable Pass % | Flaky |
 |---------|-------|-----------|-------------|-------------|---------------|-------|
 | A | 50 | 0 | 100% | 60% | 0% | 0 |
+| B | 54 | 7 | 16,7% | 13% | 13% | 0 |
 
 ## Coverage & Mutation (completed runs only)
 
-_No completed runs found._
+| Variant | N | Avg Line Cov % | Avg Branch Cov % | Avg Mutation Score % |
+|---------|---|---------------|-----------------|---------------------|
+| B | 7 | 0,0% | 0,0% | 0,0% |
 
 ## Token Usage
 
 | Variant | Total Tokens | Avg Tokens/Run | Total Prompt | Total Completion |
 |---------|-------------|---------------|-------------|-----------------|
 | A | 0 | 0 | 0 | 0 |
+| B | 83.961 | 1.555 | 37.230 | 46.731 |
 
 ## Status Breakdown
 
@@ -37,6 +42,10 @@ _No completed runs found._
 |---------|--------|-------|
 | A | baseline_complete | 30 |
 | A | test_failed | 20 |
+| B | build_failed | 34 |
+| B | completed | 7 |
+| B | no_test_project | 11 |
+| B | test_failed | 2 |
 
 ## Notes
 
