@@ -1,0 +1,29 @@
+\chapter{Related Work\label{cha:related_work}}
+This chapter synthesizes prior research on automated unit test generation and the emerging body of work that evaluates large language models for unit test generation. The focus is on empirical findings, evaluation protocols, and strategies that improve reliability.
+
+\section{LLM based unit test generation evaluations\label{sec:rw_llm_eval}}
+Recent studies have evaluated LLMs for unit test generation, often using Java and JUnit as the primary ecosystem. These works report that LLM generated tests frequently fail to compile, and that even when tests pass, they can be weak or misaligned with the intended behavior \cite{Schaefer2024,Yuan2024,Yang2024,Siddiq2024}. Common failure patterns include missing project context, incorrect assumptions about APIs, and brittle assertions.
+
+A recurring evaluation challenge is that a passing test does not necessarily provide meaningful validation. This is closely related to the oracle problem and to the risk of over fitting tests to superficial behavior. As a result, recent evaluations emphasize the importance of multi dimensional metrics rather than pass rate alone.
+
+\section{Comparisons to traditional test generation\label{sec:rw_baselines}}
+Comparative studies have contrasted LLM based test generation with search based approaches. Baseline comparisons often find that SBST tools can achieve high coverage but may generate less readable tests, while LLMs can produce more human like structure but struggle with compilation and correctness in project context \cite{Tang2023}. Earlier work on automatic test generation also showed that fault detection does not trivially follow from coverage, which motivates using stronger adequacy measures such as mutation testing \cite{Shamshiri2015,Jia2011}.
+
+These insights inform the evaluation protocol in this thesis: compilation success, execution success, and adequacy proxies are considered separately to avoid conflating different sources of failure.
+
+\section{Improvement strategies: feedback and repair\label{sec:rw_improvement}}
+A major direction in recent work is to improve LLM test generation by incorporating feedback. Instead of relying on a single generation attempt, approaches provide the model with compiler errors, test failures, or coverage feedback and request iterative refinements \cite{Yuan2024,Yang2024}. This is conceptually similar to feedback directed test generation in earlier work, where execution feedback guides exploration \cite{Pacheco2007}.
+
+Coverage guided methods aim to escape coverage plateaus by combining generation with targeted guidance \cite{Lemieux2023}. While CodaMOSA is not LLM based, it exemplifies the principle that feedback and search can provide systematic improvements beyond naive generation. For LLMs, feedback can reduce syntactic and integration errors, but it can be expensive and still limited by missing architectural context.
+
+\section{Evaluation pitfalls and measurement validity\label{sec:rw_validity}}
+The literature highlights multiple pitfalls in evaluating generated tests. First, compilation and pass rates can overestimate usefulness when tests contain trivial assertions, overly permissive checks, or test code that does not exercise the intended focal method \cite{Schaefer2024,Yang2024}. Second, flaky behavior can distort success counts, especially when tests depend on timing or shared state \cite{Luo2014}. Third, coverage and mutation are not always available in large scale pipelines due to tooling constraints, and missing metrics must be distinguished from measured zeros.
+
+A key implication for protocol design is to add explicit checks that link each test to the focal method. Where coverage is available, focal execution can be approximated via line coverage greater than zero. Where coverage is not available, alternative heuristics such as call detection or static analysis may be necessary.
+
+\section{Positioning of this thesis\label{sec:rw_positioning}}
+This thesis contributes to the empirical understanding of LLM based unit test generation in a Csharp context and focuses on practical reliability in real projects. The experiment compares a baseline against single shot generation and a repair loop protocol. The methodology emphasizes reproducibility through frozen sampling, versioned prompts, and persisted run artifacts.
+
+Compared to many prior evaluations, this work explicitly distinguishes technical success and functional success. The results show that tests may compile and pass while failing to execute the focal method, which motivates focal execution checks and guardrails against production type duplication. The repair loop protocol operationalizes this by feeding build and test feedback to the model and by applying targeted constraints for cases where misleading successes were observed.
+
+Finally, the thesis connects empirical findings to a practical developer motivation: in many teams, unit tests are underused due to perceived time cost. The results and the derived recommendations can inform realistic adoption strategies, where LLMs act as assistants under strict automated gates rather than replacements for deliberate testing practice.

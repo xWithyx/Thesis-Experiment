@@ -1,0 +1,963 @@
+================================================================================
+                     SOFTWARE DOCUMENTATION: ThesisExperiment
+================================================================================
+
+Project:        ThesisExperiment
+Purpose:        Bachelor Thesis — Automated Unit Test Generation Experiment
+Runtime:        .NET 10.0 Console Application (C#)
+Build System:   dotnet CLI / MSBuild
+CLI Framework:  System.CommandLine 2.0.2
+Entry Point:    Program.cs
+
+
+================================================================================
+ 1.  WHAT THIS SOFTWARE IS
+================================================================================
+
+ThesisExperiment is a fully automated experiment pipeline for a bachelor thesis
+on software testing. It investigates whether a Large Language Model (LLM) can
+generate meaningful unit tests for C# methods taken from real-world open-source
+GitHub repositories.
+
+The experiment compares three test variants:
+
+  Variant A — Baseline
+    The existing human-written tests already present in each project.
+    No tests are generated; the tool simply measures coverage and mutation
+    scores of whatever tests the project already ships.
+
+  Variant B — Single-Shot LLM Generation
+    A single prompt is sent to the OpenAI GPT-5-mini model asking it to
+    produce a unit test for a focal method. The generated test is written to
+    disk and evaluated through a gated pipeline (build, test, flakiness,
+    coverage, mutation).
+
+  Variant C — Repair-Loop LLM Generation
+    Like Variant B, but if the generated test fails to build or fails to pass,
+    the tool sends a repair prompt to the LLM containing the previous test code
+    and the error message. Up to 3 attempts (1 initial + 2 repairs) are made
+    before the method is declared failed.
+
+For each of the 50 focal methods (10 methods from each of 5 projects), the
+pipeline produces a structured JSON RunRecord capturing every detail: prompt
+content, raw LLM response, build output, test output, line/branch coverage,
+mutation score, flakiness classification, timestamps, token usage, and error
+information.
+
+After all runs are complete, two post-processing commands aggregate the results
+into flat CSV files and label errors with standardised categories for analysis
+in the thesis.
+
+
+================================================================================
+ 2.  THE EXPERIMENT PIPELINE — STEP BY STEP
+================================================================================
+
+The pipeline consists of 8 sequential steps, each implemented as a CLI command.
+
+------------------------------------------------------------------------
+Step 1: select-projects
+------------------------------------------------------------------------
+Command:    dotnet run -- select-projects --output appendix
+File:       Commands/SelectProjectsCommand.cs
+
+Searches the GitHub Search API for C# repositories with >50 stars, sorted by
+star count descending. Up to 100 candidate repositories are evaluated:
+
+  1. Shallow clone (git clone --depth 1)
+  2. Record commit hash (git rev-parse HEAD)
+  3. Detect test projects by scanning .csproj files for test framework NuGet
+     references (xUnit, NUnit, MSTest) or names containing "test"
+  4. Run dotnet restore + dotnet build to verify the project builds
+  5. Count public methods using Roslyn syntax analysis (excluding test/bin/obj)
+  6. Count non-empty, non-comment lines of C# code
+
+Filters applied:
+  - Build must succeed
+  - Must have at least 1 test project
+  - At least 10 public methods
+  - At least 1000 lines of C# code
+
+Outputs:
+  - appendix/project_list_full.csv      (all 100 candidates with metadata)
+  - appendix/project_list_filtered.csv   (only candidates passing all filters)
+
+Authentication: Uses GITHUB_TOKEN environment variable (optional but
+recommended to avoid the 60 req/hr unauthenticated API limit).
+
+------------------------------------------------------------------------
+Step 2: sample-methods
+------------------------------------------------------------------------
+Command:    dotnet run -- sample-methods --output appendix
+File:       Commands/SampleMethodsCommand.cs
+
+Reads project_list_filtered.csv, deterministically selects 5 projects
+(sort by repo_url, Fisher-Yates shuffle with seed=42, take first 5), then
+for each project extracts all public methods using Roslyn and samples 10
+(sort by identifier, shuffle with seed=42, take first 10).
+
+Method exclusions:
+  - Equals, GetHashCode, ToString (trivial overrides)
+  - Methods in non-public type hierarchies
+  - Methods in test, spec, bin, obj, generated, migrations directories
+
+Each method record contains:
+  - project_name, repo_url, commit_hash
+  - namespace, type_name, method_name, identifier (fully qualified)
+  - file_path (relative), line_start, line_end
+  - return_type, parameter_types, is_static, is_async
+
+Outputs:
+  - appendix/project_list_selected.csv   (the 5 chosen projects)
+  - appendix/method_list_all.csv         (all 50 sampled methods)
+
+Reproducibility: The fixed seed (42) guarantees identical selection on every
+run, given identical input data.
+
+------------------------------------------------------------------------
+Step 3: collect-baseline (Variant A)
+------------------------------------------------------------------------
+Command:    dotnet run -- collect-baseline --data-dir appendix
+File:       Commands/CollectBaselineCommand.cs
+
+For each of the 50 focal methods, measures the existing test suite:
+
+  1. Clone/checkout repo at the exact commit hash
+  2. dotnet restore + dotnet build
+  3. dotnet test with XPlat Code Coverage collection
+  4. Parse Coverlet/Cobertura XML for method-level line and branch coverage
+  5. Run Stryker.NET mutation testing per unique source file (cached)
+  6. Extract mutation score for the focal method's line range
+
+RunRecords are written with Variant="A", AttemptNumber=0, MaxAttempts=0.
+
+FinalStatus values: baseline_complete, build_failed, clone_failed
+
+Output: runs/{project}__{method}__{A}.json  (one per focal method)
+
+------------------------------------------------------------------------
+Step 4 (no command): Manual review of CSVs
+------------------------------------------------------------------------
+The researcher manually reviews project_list_selected.csv and
+method_list_all.csv. These files are frozen (committed to git) and must
+not change after this point.
+
+------------------------------------------------------------------------
+Step 5: run-single-shot (Variant B)
+------------------------------------------------------------------------
+Command:    dotnet run -- run-single-shot --output appendix
+File:       Commands/RunSingleShotCommand.cs
+
+For each focal method:
+
+  1. Reset repo to clean state (git reset --hard + git clean -fd)
+  2. Discover the test project referencing the focal file's production project
+  3. Extract the focal method's body and class context via Roslyn
+  4. Build a prompt using the single_shot.txt template (v1.0)
+  5. Send system+user messages to OpenAI GPT-5-mini (temperature=0.2,
+     max_tokens=2048)
+  6. Extract the code block from the LLM response (regex for ```csharp blocks)
+  7. Write the generated test to {test_project}/GeneratedTests/Generated__{id}.cs
+  8. Gate 1: dotnet restore + dotnet build — if fails: build_failed
+  9. Gate 2: dotnet test with coverage collection (filtered to generated class)
+     — if fails: test_failed
+ 10. Flakiness: 2 additional test runs (total 3) — if inconsistent: flaky_failure
+ 11. Coverage: parse Cobertura XML for method-level line/branch coverage
+ 12. Mutation: run Stryker.NET and extract focal method's mutation score
+
+RunRecords are written with Variant="B", AttemptNumber=1, MaxAttempts=1.
+
+FinalStatus values: completed, build_failed, test_failed, flaky_failure,
+  clone_failed, no_test_project, api_error, llm_invalid_output, internal_error
+
+Output: runs/{project}__{method}__{B}.json
+
+------------------------------------------------------------------------
+Step 6: run-repair-loop (Variant C)
+------------------------------------------------------------------------
+Command:    dotnet run -- run-repair-loop --output appendix [--max-attempts 3]
+File:       Commands/RunRepairLoopCommand.cs
+
+Like Step 5, but with an iterative repair mechanism:
+
+  Attempt 1: Uses single_shot.txt template (identical to Variant B)
+  Attempt 2+: Uses repair_attempt.txt template, which includes:
+    - {{PREVIOUS_TEST}}: the code that failed
+    - {{ERROR_MESSAGE}}: build stderr or test stderr/stdout
+
+The loop runs up to --max-attempts (default 3) and stops early on:
+  - Successful test pass (proceeds to flakiness/coverage/mutation)
+  - API error (unrecoverable)
+  - Max attempts exhausted
+
+Token counts are cumulative across all attempts.
+
+FinalStatus values: Same as Variant B plus max_attempts_reached_gate1,
+  max_attempts_reached_gate2
+
+Output: runs/{project}__{method}__{C}.json
+
+------------------------------------------------------------------------
+Step 7: aggregate-results
+------------------------------------------------------------------------
+Command:    dotnet run -- aggregate-results --runs runs --output appendix
+File:       Commands/AggregateResultsCommand.cs
+
+Reads all RunRecord JSON files from the runs/ directory and produces:
+
+  1. appendix/aggregates/runs_flat.csv
+     One row per RunRecord with all fields flattened into columns.
+
+  2. appendix/aggregates/summary_by_variant.csv
+     Per-variant aggregated metrics: total runs, completed count, build/test
+     pass rates, average line/branch coverage, average mutation score,
+     total/average token usage.
+
+  3. appendix/aggregates/summary_by_status.csv
+     FinalStatus counts grouped by variant.
+
+  4. appendix/aggregates/summary_by_project.csv
+     Per-project per-variant metrics.
+
+  5. appendix/aggregates/aggregate_report.md
+     A Markdown report with tables for pass rates, coverage, mutation, token
+     usage, and status breakdown. Ready for inclusion in the thesis appendix.
+
+------------------------------------------------------------------------
+Step 8: label-errors
+------------------------------------------------------------------------
+Command:    dotnet run -- label-errors --runs runs --output appendix
+File:       Commands/LabelErrorsCommand.cs
+
+Reads all RunRecord JSON files and applies deterministic error labeling rules
+(version v1.0) to classify failures:
+
+  Category       Subcategories
+  ─────────────  ──────────────────────────────────────────────────
+  git            clone_failed
+  discovery      no_test_project
+  openai         missing_api_key, auth_error, rate_limited, api_timeout,
+                 other_api_error
+  llm_output     empty_code, no_code_fence, contains_multiple_tests,
+                 missing_test_attribute
+  build          inaccessible_member, missing_type_or_namespace,
+                 unknown_identifier, missing_reference,
+                 implicit_conversion_error, duplicate_member,
+                 member_not_static, no_instance_required,
+                 member_not_found, file_scoped_namespace_conflict,
+                 ambiguous_call, compile_error_unknown,
+                 compile_error_csXXXX (specific CS error codes)
+  test           filter_mismatch, no_tests_found,
+                 assertion_failed_xunit, assertion_failed_nunit,
+                 assertion_failed_mstest, threw_exception_nullreference,
+                 threw_exception_argument, threw_exception_invalidoperation,
+                 timeout_or_hang, test_failed_unknown
+  flakiness      flaky_inconsistent_runs
+  internal       unknown_status_*
+
+Outputs:
+  - appendix/labels/runs_flat_labeled.csv
+  - appendix/labels/label_summary_by_variant.csv
+  - appendix/labels/label_summary_by_status.csv
+  - appendix/labels/label_report.md
+
+
+================================================================================
+ 3.  ARCHITECTURE AND CODE ORGANISATION
+================================================================================
+
+ThesisExperiment/
+  Program.cs                         CLI entry point and command registration
+  ThesisExperiment.csproj            Project file (.NET 10.0, 6 NuGet packages)
+  ThesisExperiment.sln               Solution file
+  Commands/                          Pipeline step implementations (7 files)
+    SelectProjectsCommand.cs         Step 1: GitHub search + evaluation
+    SampleMethodsCommand.cs          Step 2: Deterministic method sampling
+    CollectBaselineCommand.cs        Step 3: Variant A baseline measurement
+    RunSingleShotCommand.cs          Step 5: Variant B single-shot generation
+    RunRepairLoopCommand.cs          Step 6: Variant C repair-loop generation
+    AggregateResultsCommand.cs       Step 7: JSON-to-CSV aggregation
+    LabelErrorsCommand.cs            Step 8: Error categorisation
+  Models/                            Data transfer objects (16 files)
+    RunRecord.cs                     Top-level experiment record
+    ProjectInfo.cs                   Project identity (name, URL, commit, stars)
+    MethodInfo.cs                    Focal method identity and location
+    ExperimentInfo.cs                Variant, attempt number, prompt version
+    ModelInfo.cs                     LLM provider, model ID, temperature, tokens
+    PromptInfo.cs                    System/user messages sent to LLM
+    ResponseInfo.cs                  Raw LLM response, extracted code, tokens
+    OutcomeInfo.cs                   Gate results and final status
+    ErrorInfo.cs                     Error category, subcategory, raw message
+    BuildResult.cs                   dotnet build output capture
+    TestResult.cs                    dotnet test output capture
+    CoverageResult.cs                Line and branch coverage metrics
+    MutationResult.cs                Mutation testing metrics (Stryker)
+    FlakinessResult.cs               Stability check results (3 runs)
+    ProjectCandidate.cs              CSV-mapped GitHub candidate project
+    SampledMethod.cs                 CSV-mapped sampled focal method
+    RunFlatRow.cs                    Flattened RunRecord for CSV export
+  Services/                          Reusable service classes (10 files)
+    OpenAiService.cs                 OpenAI GPT-5-mini chat completion API
+    RoslynMethodExtractor.cs         C# source code extraction via Roslyn
+    TestProjectDiscoveryService.cs   Test project detection by ProjectReference
+    PromptTemplateService.cs         Template loading and placeholder replacement
+    GitCleanupService.cs             Git clone, checkout, reset, clean operations
+    DotnetBuildService.cs            dotnet restore + dotnet build execution
+    DotnetTestService.cs             dotnet test with/without coverage
+    CoverletService.cs               Cobertura XML coverage parsing
+    StrykerService.cs                Stryker.NET mutation testing + JSON parsing
+    JsonLogger.cs                    RunRecord JSON serialisation
+  prompts/                           Prompt templates (frozen v1.0)
+    v1.0/single_shot.txt             Single-shot test generation template
+    v1.0/repair_attempt.txt          Repair loop iteration template
+    README.md                        Template versioning documentation
+    v1.0/manual_test_notes.md        Filled prompt examples for validation
+  appendix/                          Thesis appendix assets
+    prompt_templates/v1.0/           Frozen copies of prompt templates
+      manifest.txt                   Template manifest (version, placeholders)
+      single_shot.txt                Identical to prompts/v1.0/single_shot.txt
+      repair_attempt.txt             Identical to prompts/v1.0/repair_attempt.txt
+
+Runtime directories (not in git):
+  repos/                             Cloned GitHub repositories
+  runs/                              RunRecord JSON output files
+  appendix/aggregates/               Aggregated CSV and Markdown reports
+  appendix/labels/                   Error label CSV and Markdown reports
+
+Namespace structure:
+  ThesisExperiment.Commands          All 7 command classes
+  ThesisExperiment.Models            All 16 model classes
+  ThesisExperiment.Services          All 10 service classes + helper types
+
+
+================================================================================
+ 4.  NUGET DEPENDENCIES
+================================================================================
+
+Package                              Version   Purpose
+────────────────────────────────────  ────────  ──────────────────────────────────
+CliWrap                              3.10.0    Wraps shell commands (git, dotnet)
+                                               with buffered stdout/stderr capture,
+                                               timeout control, and exit code
+                                               handling. Used in: GitCleanupService,
+                                               DotnetBuildService, DotnetTestService,
+                                               StrykerService, SelectProjectsCommand,
+                                               SampleMethodsCommand.
+
+CsvHelper                            33.1.0    CSV reading and writing with header
+                                               mapping via [Name] attributes. Used
+                                               for all CSV I/O across all commands.
+
+Microsoft.CodeAnalysis.CSharp        5.0.0     Roslyn syntax tree parsing for C#.
+                                               Used in: RoslynMethodExtractor (method
+                                               body/signature/context extraction),
+                                               SelectProjectsCommand (public method
+                                               counting), SampleMethodsCommand
+                                               (method extraction and sampling).
+
+Octokit                              14.0.0    GitHub REST API client. Used in:
+                                               SelectProjectsCommand (repository
+                                               search, rate limit management).
+
+OpenAI                               2.8.0     Official OpenAI .NET SDK for chat
+                                               completions. Used in: OpenAiService
+                                               (GPT-5-mini API calls with
+                                               temperature, max tokens, token usage
+                                               tracking, and request ID extraction).
+
+System.CommandLine                   2.0.2     CLI argument parsing and command
+                                               registration. Used in: Program.cs
+                                               (all 7 subcommands with options).
+
+
+================================================================================
+ 5.  DATA MODEL — RunRecord
+================================================================================
+
+Every experiment run produces one RunRecord JSON file. The RunRecord is the
+central data structure that captures the complete state of a single experiment
+execution for one focal method in one variant.
+
+RunRecord (top-level)
+  runId              Unique identifier: "{Variant}__{project}__{method}"
+  timestampStart     UTC start time
+  timestampEnd       UTC end time
+  project            ProjectInfo
+    name             Project name (from repo URL)
+    repoUrl          GitHub repository URL
+    commitHash       Exact commit hash used
+    stars            GitHub star count
+    license          License (if available)
+  method             MethodInfo
+    identifier       Fully qualified: "Namespace.Type.Method(ParamTypes)"
+    filePath         Relative source file path
+    lineStart        First line of method in source file
+    lineEnd          Last line of method in source file
+    signature        Human-readable method signature
+    bodyHash         Hash of method body (for change detection)
+    containingClass  "Namespace.TypeName"
+    containingFile   Same as filePath
+  experiment         ExperimentInfo
+    variant          "A", "B", or "C"
+    attemptNumber    Current attempt (0 for baseline, 1+ for LLM variants)
+    maxAttempts      Maximum allowed attempts (0 for A, 1 for B, 3 for C)
+    promptVersion    "v1.0"
+    promptFile       Template file used ("prompts/v1.0/single_shot.txt" etc.)
+  model              ModelInfo
+    provider         "openai" (or empty for baseline)
+    modelId          Exact model ID from API response (e.g. "gpt-5-mini-0125")
+    temperature      0.2
+    maxTokens        2048
+    requestId        OpenAI x-request-id header
+  prompt             PromptInfo
+    systemMessage    System prompt sent to LLM
+    userMessage      User prompt sent to LLM
+    errorFeedback    Error from previous attempt (Variant C only)
+    previousTest     Previous test code (Variant C only)
+    templateFile     Template file path
+    templateVersion  "v1.0"
+  response           ResponseInfo
+    rawText          Full LLM response text
+    extractedCode    Code extracted from ```csharp``` block
+    tokensUsed       Total tokens (cumulative for Variant C)
+    promptTokens     Input token count (cumulative for Variant C)
+    completionTokens Output token count (cumulative for Variant C)
+    finishReason     "Stop", "Length", etc.
+  build              BuildResult
+    command          Exact command string
+    exitCode         Process exit code
+    stdout           Captured stdout (truncated at 10,000 chars)
+    stderr           Captured stderr (truncated at 10,000 chars)
+    durationSeconds  Wall-clock time
+  test               TestResult
+    command          Exact command string
+    exitCode         Process exit code
+    stdout           Captured stdout (truncated at 10,000 chars)
+    stderr           Captured stderr (truncated at 10,000 chars)
+    durationSeconds  Wall-clock time
+  coverage           CoverageResult
+    tool             "coverlet"
+    scope            "method"
+    lineCovered      Number of lines hit
+    lineTotal        Total instrumentable lines
+    linePercent      Line coverage percentage (null if no data)
+    branchCovered    Number of branches covered
+    branchTotal      Total branches
+    branchPercent    Branch coverage percentage (null if no data)
+    note             Additional info (e.g. "collected from failing test run")
+  mutation           MutationResult
+    tool             "stryker"
+    scope            "method"
+    scopedTo         "file.cs:lineStart-lineEnd"
+    mutantsKilled    Mutants killed by tests
+    mutantsSurvived  Mutants that survived (including NoCoverage)
+    mutantsTotal     Total mutants generated
+    mutationScore    Kill percentage (null if no mutants)
+  flakiness          FlakinessResult
+    runsExecuted     Number of test runs (3 for LLM variants)
+    runResults       Array of "pass"/"fail" strings
+    classification   "stable_pass" or "flaky"
+  outcome            OutcomeInfo
+    gate1BuildPassed Build gate result (boolean)
+    gate2TestPassed  Test gate result (boolean)
+    finalStatus      Terminal status string (see below)
+    stopReason       Reason for stopping
+  error              ErrorInfo
+    category         Top-level error category
+    subcategory      Detailed error subcategory
+    rawMessage       Original error text
+    labeledBy        "automation" (set by pipeline)
+    labeledAt        Timestamp when labeled (set by label-errors)
+
+FinalStatus Values:
+  baseline_complete    Variant A: existing tests measured successfully
+  completed           Variant B/C: generated test passed all gates
+  build_failed        dotnet build failed
+  test_failed         dotnet test failed
+  flaky_failure       Test results inconsistent across 3 runs
+  clone_failed        Git clone or checkout failed
+  no_test_project     Could not find a test project for the focal file
+  api_error           OpenAI API call failed
+  llm_invalid_output  LLM response contained no usable code
+  internal_error      Unexpected exception in pipeline
+
+
+================================================================================
+ 6.  SERVICES — DETAILED DESCRIPTIONS
+================================================================================
+
+--- 6.1  OpenAiService ---
+File:   Services/OpenAiService.cs
+Types:  OpenAiResult (result DTO), OpenAiService (API client)
+
+Creates a ChatClient for model "gpt-5-mini" using the OPENAI_API_KEY
+environment variable. Throws InvalidOperationException if the key is missing.
+
+GenerateTestAsync(systemMessage, userMessage) -> OpenAiResult:
+  - Sends SystemChatMessage + UserChatMessage
+  - ChatCompletionOptions: Temperature=0.2, MaxOutputTokenCount=2048
+  - Returns: RawText, ExtractedCode, PromptTokens, CompletionTokens,
+    TotalTokens, FinishReason, ModelId, RequestId
+  - ExtractCodeBlock: regex ``` ```(?:csharp|cs)?\s*\n(.*?)``` ```
+    with Singleline mode; fallback: entire text trimmed
+
+--- 6.2  RoslynMethodExtractor ---
+File:   Services/RoslynMethodExtractor.cs
+Types:  ExtractionResult (result DTO), RoslynMethodExtractor (extractor)
+
+ExtractMethod(absoluteFilePath, methodName, lineStart, lineEnd, typeName):
+  1. Parse C# file into Roslyn SyntaxTree
+  2. Find MethodDeclarationSyntax matching name + line overlap
+  3. Extract:
+     - MethodBody: block body content (braces stripped, indentation normalised)
+       or expression body
+     - MethodSignature: modifiers + return type + name + type params + params
+     - ClassContext: signatures of all other members in the containing class
+       (max 4000 chars, truncated with "// ... (truncated)")
+  4. Fallback: if Roslyn cannot find the method, read raw lines from file
+     and set UsedFallback=true
+
+--- 6.3  TestProjectDiscoveryService ---
+File:   Services/TestProjectDiscoveryService.cs
+Types:  TestProjectInfo (result DTO), TestProjectDiscoveryService (finder)
+
+DiscoverTestProject(repoRoot, focalFileRelativePath):
+  1. Walk up from focal file to find the nearest .csproj (production project)
+  2. Scan all .csproj files in the repo
+  3. Primary: find test .csproj with <ProjectReference> pointing at production
+  4. Fallback: find test .csproj by naming convention (contains "test")
+  5. Detect framework: xUnit (Fact), NUnit (Test), MSTest (TestMethod)
+     by checking .csproj content for framework NuGet references
+
+--- 6.4  PromptTemplateService ---
+File:   Services/PromptTemplateService.cs
+Types:  PromptPair (system+user messages), PromptTemplateService (loader)
+
+Loads prompt templates from disk (prompts/v1.0/) and replaces placeholders:
+  {{TEST_FRAMEWORK}}, {{TEST_ATTRIBUTE}}, {{NAMESPACE}}, {{CLASS_NAME}},
+  {{SIGNATURE}}, {{METHOD_BODY}}, {{CLASS_CONTEXT}} (single-shot)
+  + {{PREVIOUS_TEST}}, {{ERROR_MESSAGE}} (repair)
+
+Templates are split at the "System:\n" / "User:\n" markers via regex.
+
+--- 6.5  GitCleanupService ---
+File:   Services/GitCleanupService.cs
+
+EnsureRepoAtCommitAsync(repoUrl, clonePath, commitHash):
+  - Clones if directory doesn't exist (appends .git to URL if needed)
+  - Unshallows if clone is shallow (git fetch --unshallow)
+  - Checks out exact commit hash
+  - Hard resets + cleans to ensure pristine state
+
+ResetToCleanStateAsync(repoPath, commitHash):
+  - Lightweight reset: git reset --hard + git clean -fd
+  - Called before each method to prevent test pollution
+
+--- 6.6  DotnetBuildService ---
+File:   Services/DotnetBuildService.cs
+
+BuildAsync(workingDirectory) -> BuildResult:
+  - Runs: dotnet restore, then dotnet build --no-restore
+  - Captures stdout/stderr (truncated at 10,000 chars)
+  - Records wall-clock duration
+
+--- 6.7  DotnetTestService ---
+File:   Services/DotnetTestService.cs
+
+RunTestsWithCoverageAsync(workingDirectory, filter?) -> (TestResult, coverageDir):
+  - Runs: dotnet test --no-build --collect:"XPlat Code Coverage"
+  - Optional --filter for targeting specific test classes
+  - Returns coverage results directory path
+
+RunTestsOnlyAsync(workingDirectory, filter?) -> TestResult:
+  - Runs: dotnet test --no-build (without coverage collection)
+  - Used for flakiness re-runs (faster without coverage overhead)
+
+--- 6.8  CoverletService ---
+File:   Services/CoverletService.cs
+
+FindCoberturaFiles(coverageResultsDir) -> List<string>:
+  - Recursively finds all coverage.cobertura.xml files
+
+ParseMethodCoverage(files, filePath, lineStart, lineEnd, repoRoot):
+  - Parses Cobertura XML, matches source file by path suffix
+  - Filters to lines within [lineStart, lineEnd]
+  - Computes: lines covered/total, branches covered/total, percentages
+  - Handles branch condition-coverage attributes (e.g. "50% (1/2)")
+
+--- 6.9  StrykerService ---
+File:   Services/StrykerService.cs
+
+RunStrykerForFileAsync(workingDirectory, sourceFilePath, cacheKey):
+  - In-memory cache per cacheKey (avoids re-running Stryker for same file)
+  - Runs: dotnet stryker --mutate {file} --reporter json
+  - 10-minute timeout per run
+  - Finds and uses solution file if available
+  - Parses mutation-report.json from StrykerOutput/
+
+ExtractMethodMutation(fileResult, filePath, lineStart, lineEnd):
+  - Filters mutants to the focal method's line range
+  - Counts: Killed, Survived (including NoCoverage), Total
+  - Computes mutation score = Killed / Total * 100
+
+--- 6.10  JsonLogger ---
+File:   Services/JsonLogger.cs
+
+WriteRunRecord(record, filePath):
+  - Serialises RunRecord to indented JSON with camelCase naming
+  - Creates output directory if needed
+  - Writes UTF-8 encoded file
+
+GetOutputPath(runsDir, projectName, identifier, variant):
+  - Builds: {runsDir}/{projectName}__{sanitized_id}__{variant}.json
+  - SanitizeForFilename: replaces invalid chars, parens, commas, spaces
+    with underscores
+
+
+================================================================================
+ 7.  PROMPT TEMPLATES
+================================================================================
+
+Templates are stored in prompts/v1.0/ and copied to the build output directory
+via the <Content> MSBuild item in the .csproj file. Frozen copies are also kept
+in appendix/prompt_templates/v1.0/ for thesis reproducibility.
+
+--- 7.1  single_shot.txt (used by Variant B and Variant C attempt 1) ---
+
+System message:
+  "You are a unit test generation assistant for C# using {framework}."
+  - Generate exactly one test method
+  - Return only code in a single code block
+  - Use the correct test attribute ([Fact]/[Test]/[TestMethod])
+  - Constraints: deterministic, no network/env/external services,
+    file system only via temp dirs, Arrange-Act-Assert structure
+
+User message:
+  - Namespace, Class, Method signature
+  - Full method body
+  - Class context (other methods and fields)
+
+--- 7.2  repair_attempt.txt (used by Variant C attempts 2+) ---
+
+System message:
+  "The previous test attempt failed. Fix the error and return the corrected test."
+  - Fix compile errors first, then failing assertions/setup
+  - Same constraints as single-shot
+
+User message:
+  - Original method info (namespace, class, signature, body)
+  - Previous test code that failed
+  - Error message from build or test output
+
+Placeholders (both templates):
+  {{TEST_FRAMEWORK}}   — xUnit | NUnit | MSTest
+  {{TEST_ATTRIBUTE}}   — Fact | Test | TestMethod
+  {{NAMESPACE}}        — Namespace of the focal class
+  {{CLASS_NAME}}       — Name of the focal class
+  {{SIGNATURE}}        — Full method signature
+  {{METHOD_BODY}}      — Source code of the focal method
+  {{CLASS_CONTEXT}}    — Other methods/fields (single-shot only)
+  {{PREVIOUS_TEST}}    — Failed test code (repair only)
+  {{ERROR_MESSAGE}}    — Build/test error (repair only)
+
+
+================================================================================
+ 8.  GATED EVALUATION PIPELINE
+================================================================================
+
+For Variants B and C, every generated test goes through a strict gated pipeline:
+
+  +-------------------+
+  | LLM generates     |
+  | test code         |
+  +--------+----------+
+           |
+           v
+  +-------------------+     No code extracted
+  | Extract code from +---> FinalStatus: llm_invalid_output
+  | ```csharp``` block|
+  +--------+----------+
+           |
+           v
+  +-------------------+     Build fails
+  | Gate 1: Build     +---> FinalStatus: build_failed
+  | dotnet restore +  |     (Variant C: retry with repair prompt)
+  | dotnet build      |
+  +--------+----------+
+           |
+           v
+  +-------------------+     Test fails
+  | Gate 2: Test      +---> FinalStatus: test_failed
+  | dotnet test       |     (Variant C: retry with repair prompt)
+  | (with coverage)   |
+  +--------+----------+
+           |
+           v
+  +-------------------+     Inconsistent results
+  | Flakiness Check   +---> FinalStatus: flaky_failure
+  | 3 runs total      |
+  | (must be stable)  |
+  +--------+----------+
+           |
+           v
+  +-------------------+
+  | Coverage: parse   |
+  | Cobertura XML     |
+  +--------+----------+
+           |
+           v
+  +-------------------+
+  | Mutation: run     |
+  | Stryker.NET       |
+  +--------+----------+
+           |
+           v
+  +-------------------+
+  | FinalStatus:      |
+  | completed         |
+  +-------------------+
+
+Test Filtering:
+  Generated tests are filtered using --filter "FullyQualifiedName~{ClassName}"
+  to ensure only the generated test class runs, not the entire project's test
+  suite. The class name is extracted via regex from the generated code.
+
+Flakiness Detection:
+  Three test runs are executed:
+    Run 1: dotnet test with coverage (Gate 2)
+    Run 2: dotnet test without coverage
+    Run 3: dotnet test without coverage
+  All three must produce the same result ("pass" or "fail"). If results are
+  inconsistent, the test is classified as "flaky" and marked flaky_failure.
+
+
+================================================================================
+ 9.  OUTPUT FILES AND DIRECTORY STRUCTURE
+================================================================================
+
+After a full experiment run, the directory structure looks like:
+
+ThesisExperiment/
+  appendix/
+    project_list_full.csv             All 100 evaluated GitHub projects
+    project_list_filtered.csv         Projects passing all filters
+    project_list_selected.csv         The 5 chosen projects (frozen)
+    method_list_all.csv               The 50 sampled methods (frozen)
+    prompt_templates/v1.0/            Frozen template copies for thesis
+      manifest.txt                    Template metadata
+      single_shot.txt                 Single-shot template
+      repair_attempt.txt              Repair template
+    aggregates/                       Step 7 outputs
+      runs_flat.csv                   All RunRecords flattened (1 row each)
+      summary_by_variant.csv          Metrics per variant (A, B, C)
+      summary_by_status.csv           Status counts per variant
+      summary_by_project.csv          Metrics per project per variant
+      aggregate_report.md             Human-readable Markdown report
+    labels/                           Step 8 outputs
+      runs_flat_labeled.csv           RunRecords with error labels added
+      label_summary_by_variant.csv    Error label counts per variant
+      label_summary_by_status.csv     Error labels per FinalStatus
+      label_report.md                 Error analysis Markdown report
+  repos/                              Cloned repositories (gitignored)
+    {owner}__{name}/                  One per project
+  runs/                               RunRecord JSONs (gitignored)
+    {project}__{method}__{A}.json     Variant A baseline
+    {project}__{method}__{B}.json     Variant B single-shot
+    {project}__{method}__{C}.json     Variant C repair-loop
+
+
+================================================================================
+ 10.  CONFIGURATION AND ENVIRONMENT
+================================================================================
+
+Environment Variables:
+  GITHUB_TOKEN       GitHub personal access token (optional, recommended)
+                     Used by SelectProjectsCommand for API authentication.
+                     Without it, GitHub limits to 60 requests/hour.
+
+  OPENAI_API_KEY     OpenAI API key (required for Variants B and C)
+                     Must be set before running run-single-shot or run-repair-loop.
+                     The application will throw at startup if missing.
+
+Project Configuration:
+  Target Framework:  net10.0 (preview)
+  Nullable:          enable
+  ImplicitUsings:    enable (System namespaces auto-imported)
+  RestorePackagesWithLockFile: true (packages.lock.json for reproducibility)
+
+CLI Usage:
+  dotnet run -- select-projects [--output appendix]
+  dotnet run -- sample-methods [--output appendix]
+  dotnet run -- collect-baseline [--data-dir appendix]
+  dotnet run -- run-single-shot [--output appendix]
+  dotnet run -- run-repair-loop [--output appendix] [--max-attempts 3]
+  dotnet run -- aggregate-results [--runs runs] [--output appendix]
+  dotnet run -- label-errors [--runs runs] [--output appendix]
+
+All options have default values, so the simplest invocation is:
+  dotnet run -- {command}
+
+
+================================================================================
+ 11.  REPRODUCIBILITY GUARANTEES
+================================================================================
+
+The experiment is designed for full reproducibility:
+
+  1. Fixed Random Seed: SampleMethodsCommand uses seed=42 for both project
+     selection and method sampling shuffles.
+
+  2. Frozen CSVs: project_list_selected.csv and method_list_all.csv are
+     committed to git and must not change after Step 2.
+
+  3. Exact Commit Hashes: Each method record stores the exact commit hash.
+     GitCleanupService checks out that exact commit before every measurement.
+
+  4. Frozen Prompt Templates: Templates are versioned (v1.0) and stored in
+     both prompts/ (for runtime) and appendix/prompt_templates/ (for thesis).
+     The manifest.txt states "FROZEN (do not modify — create v1.1 for changes)".
+
+  5. Deterministic LLM Settings: Temperature=0.2 (low randomness),
+     MaxOutputTokenCount=2048, model="gpt-5-mini".
+
+  6. Clean State Per Method: git reset --hard + git clean -fd before every
+     focal method to prevent test pollution between measurements.
+
+  7. Locked NuGet Packages: RestorePackagesWithLockFile=true ensures exact
+     dependency versions via packages.lock.json.
+
+  8. JSON RunRecords: Every detail is recorded (prompts, responses, outputs,
+     timings, tokens) so results can be verified and audited.
+
+
+================================================================================
+ 12.  ERROR HANDLING STRATEGY
+================================================================================
+
+The pipeline is designed to be resilient. Every possible failure is caught
+and recorded as a RunRecord with an appropriate FinalStatus:
+
+  - Git failures: Caught at project level; all methods in the project receive
+    a clone_failed record.
+
+  - No test project: Caught per method; method receives no_test_project record.
+
+  - API failures: Caught per method; method receives api_error record.
+
+  - Build failures: Caught at Gate 1; method receives build_failed record.
+    In Variant C, the error is fed back to the LLM for repair.
+
+  - Test failures: Caught at Gate 2; method receives test_failed record.
+    In Variant C, the error is fed back to the LLM for repair.
+
+  - Flaky tests: Detected via 3-run stability check; method receives
+    flaky_failure record.
+
+  - Stryker failures: Caught per file; mutation result is empty but the run
+    continues (does not affect FinalStatus).
+
+  - Unexpected exceptions: Caught at method level with try/catch;
+    method receives internal_error record.
+
+No method is ever silently skipped. Every one of the 50 methods always
+produces exactly one RunRecord JSON file per variant.
+
+
+================================================================================
+ 13.  KEY DESIGN DECISIONS
+================================================================================
+
+  1. One JSON per method per variant: Rather than a single large output file,
+     each RunRecord is an independent JSON file. This allows incremental runs
+     (restart without losing progress) and simplifies debugging.
+
+  2. Test filtering by class name: Generated tests are run with
+     --filter "FullyQualifiedName~{ClassName}" to isolate them from the
+     project's existing test suite. This ensures Gate 2 only evaluates the
+     generated test, not pre-existing tests that might fail.
+
+  3. Coverage collected during Gate 2: The first test run (Gate 2) uses
+     --collect:"XPlat Code Coverage" so coverage data is available even if
+     subsequent flakiness runs fail. This avoids an extra coverage-only run.
+
+  4. Stryker caching per file: Multiple focal methods may come from the same
+     source file. Stryker results are cached in-memory by a composite key
+     (project::commit::file) to avoid redundant 10-minute mutation runs.
+
+  5. Cumulative token tracking for Variant C: Token counts across all repair
+     attempts are summed, giving a true cost picture for the repair loop.
+
+  6. Roslyn fallback extraction: If Roslyn cannot locate the method (e.g. due
+     to syntax errors in the source file), the extractor falls back to raw
+     line-range reading. This ensures the pipeline never blocks on extraction.
+
+  7. Template versioning: Prompts are versioned (v1.0) so future experiments
+     can use updated templates (v1.1, v2.0) without breaking reproducibility
+     of previous runs. Each RunRecord stores which template version was used.
+
+
+================================================================================
+ 14.  HOW TO RUN THE FULL EXPERIMENT
+================================================================================
+
+Prerequisites:
+  - .NET 10.0 SDK installed
+  - Git installed and accessible on PATH
+  - Stryker.NET dotnet tool installed:  dotnet tool install -g dotnet-stryker
+  - Environment variables set:
+      GITHUB_TOKEN=ghp_...       (for Step 1)
+      OPENAI_API_KEY=sk-...      (for Steps 5 and 6)
+
+Execution order:
+
+  Step 1:  dotnet run -- select-projects --output appendix
+           -> Produces project_list_full.csv, project_list_filtered.csv
+
+  Step 2:  dotnet run -- sample-methods --output appendix
+           -> Produces project_list_selected.csv, method_list_all.csv
+           -> COMMIT THESE FILES TO GIT (they are now frozen)
+
+  Step 3:  dotnet run -- collect-baseline --data-dir appendix
+           -> Produces runs/*__A.json
+
+  Step 5:  dotnet run -- run-single-shot --output appendix
+           -> Produces runs/*__B.json
+
+  Step 6:  dotnet run -- run-repair-loop --output appendix --max-attempts 3
+           -> Produces runs/*__C.json
+
+  Step 7:  dotnet run -- aggregate-results --runs runs --output appendix
+           -> Produces appendix/aggregates/*.csv and aggregate_report.md
+
+  Step 8:  dotnet run -- label-errors --runs runs --output appendix
+           -> Produces appendix/labels/*.csv and label_report.md
+
+After completion, the thesis can reference:
+  - appendix/aggregates/aggregate_report.md  for quantitative results
+  - appendix/labels/label_report.md          for error analysis
+  - appendix/aggregates/runs_flat.csv        for statistical analysis
+  - appendix/prompt_templates/v1.0/          for prompt documentation
+  - Individual runs/*.json files             for detailed case studies
+
+
+================================================================================
+ 15.  SUMMARY OF SOURCE FILE COUNTS
+================================================================================
+
+  Category      Files   Lines of Code (approx.)
+  ────────────  ──────  ────────────────────────
+  Commands        7     ~2,500
+  Models         16     ~280
+  Services       10     ~1,050
+  Program.cs      1     ~180
+  Templates       2     ~60
+  ────────────  ──────  ────────────────────────
+  TOTAL          36     ~4,070
+
+The application has zero external test projects — it is a tool, not a library.
+Testing is performed via the self-check procedure (structural verification,
+build validation, CLI verification, namespace consistency checks).
+
+================================================================================
+                           END OF DOCUMENTATION
+================================================================================

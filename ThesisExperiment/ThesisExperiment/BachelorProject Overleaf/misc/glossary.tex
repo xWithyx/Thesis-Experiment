@@ -1,0 +1,163 @@
+
+% CORE CONCEPTS
+\newglossaryentry{focalmethod}{
+  name={focal method},
+  description={The production method under evaluation for which a unit test is generated and assessed}
+}
+
+\newglossaryentry{single_shot}{
+  name={single shot generation},
+  description={A test generation approach where the model produces a test in one attempt without feedback from compilation or test execution}
+}
+
+\newglossaryentry{repair_loop}{
+  name={repair loop},
+  description={An iterative test generation approach where the model receives build or test feedback and produces corrected versions over multiple attempts}
+}
+
+\newglossaryentry{baseline_variant}{
+  name={baseline variant},
+  description={Variant A in the experiment, representing existing human-written tests used as a reference for comparison}
+}
+
+\newglossaryentry{oracle_problem}{
+  name={oracle problem},
+  description={The challenge of determining the expected output or behavior for a given input, particularly when specifications are incomplete or ambiguous}
+}
+
+\newglossaryentry{prompt_template}{
+  name={prompt template},
+  description={A versioned text file containing placeholders that is filled with method context and sent to the language model}
+}
+
+% GATES & SUCCESS CRITERIA
+\newglossaryentry{gate}{
+  name={gate},
+  description={A required pass condition in the automated pipeline, used to classify outcomes, such as build gate or test gate}
+}
+
+\newglossaryentry{build_gate}{
+  name={build gate},
+  description={The compilation step executed via \texttt{dotnet build} that must pass before a test can be executed}
+}
+
+\newglossaryentry{test_gate}{
+  name={test gate},
+  description={The execution step executed via \texttt{dotnet test} that must pass after successful compilation}
+}
+
+\newglossaryentry{technical_success}{
+  name={technical success},
+  description={A run outcome where the generated test compiles and passes the test gate under the stability check}
+}
+
+\newglossaryentry{functional_success}{
+  name={functional success},
+  description={A run outcome where the generated test both passes and executes the focal method at least once, approximated by non zero coverage where available}
+}
+
+% FAILURE MODES
+\newglossaryentry{type_duplication}{
+  name={type duplication},
+  description={A failure mode where the generated test defines production like types inside the test file, potentially shadowing the real implementation and preventing focal execution}
+}
+
+\newglossaryentry{shadowing}{
+  name={type shadowing},
+  description={A name conflict where a locally defined type hides an imported production type, causing the test to use the local copy instead of the real code}
+}
+
+\newglossaryentry{cs0436}{
+  name={CS0436},
+description={A Csharp compiler warning indicating a type conflict where a local type has the same name as an imported type from a referenced assembly}
+}
+
+% COVERAGE METRICS
+\newglossaryentry{coverage_available}{
+  name={coverage available},
+  description={A state where code coverage instrumentation is present and a coverage report can be produced for a run}
+}
+
+\newglossaryentry{coverage_unavailable}{
+  name={coverage unavailable},
+  description={A state where code coverage instrumentation is missing or fails, so coverage values cannot be interpreted as zero}
+}
+
+\newglossaryentry{line_coverage}{
+  name={line coverage},
+  description={A code coverage metric measuring the percentage of source code lines executed at least once during test runs}
+}
+
+\newglossaryentry{branch_coverage}{
+  name={branch coverage},
+  description={A code coverage metric measuring the percentage of control flow branches taken during test runs}
+}
+
+% MUTATION TESTING
+\newglossaryentry{mutation_score}{
+  name={mutation score},
+  description={The ratio of mutants killed by the test suite to the total number of generated mutants, expressed as a percentage}
+}
+
+\newglossaryentry{mutant}{
+  name={mutant},
+  description={A small syntactic modification of the source code introduced by a mutation testing tool to evaluate the fault detection capability of tests}
+}
+
+\newglossaryentry{stryker}{
+  name={Stryker.NET},
+  description={A mutation testing tool for .NET that creates small code changes called mutants and measures how many are detected by the test suite}
+}
+
+% COVERAGE TOOLS
+\newglossaryentry{coverlet}{
+  name={Coverlet},
+  description={A cross-platform code coverage library for .NET that instruments assemblies and collects coverage data during test execution}
+}
+
+\newglossaryentry{cobertura}{
+  name={Cobertura},
+description={An XML based coverage report format used to store line and branch coverage results and supported by multiple tooling ecosystems}
+}
+
+% PIPELINE & INFRASTRUCTURE
+\newglossaryentry{flakiness_check}{
+  name={flakiness check},
+  description={A repeated execution procedure used to detect flaky tests by running the same test multiple times under identical conditions}
+}
+
+\newglossaryentry{runrecord}{
+  name={RunRecord},
+  plural={RunRecords},
+  description={A persisted JSON artifact representing one execution of the experiment pipeline, including prompt metadata, generated code, gate outputs, and metrics}
+}
+
+\newglossaryentry{dedup_rule}{
+  name={deduplication rule},
+  description={A rule used in analysis to select a single representative record per method identifier, used to handle pilot runs or reruns}
+}
+
+\newglossaryentry{sampling_seed}{
+  name={selection seed},
+  description={A fixed seed used to make project and method selection deterministic and reproducible}
+}
+
+\newglossaryentry{repair_policy}{
+  name={repair policy},
+  description={A versioned configuration defining repair loop behavior, including error message injection strategies and success criteria}
+}
+
+\newglossaryentry{token_budget}{
+  name={token budget},
+description={The maximum number of tokens permitted per LLM request, limiting the combined prompt and completion length}
+}
+
+\newglossaryentry{idempotency}{
+  name={idempotency},
+  description={A property of the pipeline where re-running a command produces the same result and skips already completed records}
+}
+
+\newglossaryentry{focal_execution}{
+  name={focal execution},
+  description={A property of a generated test where the real focal method in the production assembly is executed at least once during the test run}
+}

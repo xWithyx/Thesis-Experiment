@@ -1,0 +1,33 @@
+\chapter{Conclusion\label{cha:conclusion}}
+This chapter summarizes the thesis, answers the research questions, and provides recommendations and future work directions.
+
+\section{Summary\label{sec:conclusion_summary}}
+This thesis investigated whether LLM based unit test generation can effectively support unit testing in real world Csharp projects, and whether iterative repair using build and test feedback improves outcomes compared to single shot generation. A controlled experiment was executed on a locked dataset of five open source projects and fifty focal methods. Three variants were compared: baseline tests, single shot LLM generation, and a repair loop with up to three attempts per target.
+
+\section{Answers to Research Questions\label{sec:conclusion_answers}}
+The results provide the following answers:
+\begin{enumerate}
+  \item Compilation and pass rates. Single shot generation achieved low compilation success, and most failures occurred at build time. The repair loop did not substantially increase compilation success, indicating that complex build errors remain a hard barrier without richer project context.
+  \item Quality and focal execution. Passing tests were not a reliable indicator of usefulness. Several generated tests compiled and passed while not executing the focal method due to production type duplication and shadowing. This implies that focal execution checks are necessary to avoid misleading green results.
+  \item Repair effectiveness. The repair loop produced the first functional successes with non zero line coverage on completed runs. This shows that feedback driven iteration can convert some misleading successes into functional tests, but only for a subset of targets. The improvement comes with significantly higher token cost.
+\end{enumerate}
+
+\section{Recommendations\label{sec:conclusion_recommendations}}
+For practitioners considering LLM assisted unit testing in Csharp projects, the following recommendations are supported by the study:
+\begin{enumerate}
+  \item Use automated gates. Require \texttt{dotnet build} and \texttt{dotnet test} success before accepting generated tests.
+  \item Enforce focal execution. Where coverage is available, require coverage greater than 0 for the focal method, or use a robust alternative call detection rule.
+  \item Block type duplication. Treat CS0436 and duplicated production type definitions as hard failures.
+  \item Apply repair loops selectively. Use iterative repair for near miss cases and limit attempts to control cost.
+  \item Treat the LLM as an assistant, not a replacement. Use it to accelerate scaffolding and idea generation, while keeping validation responsibility with developers.
+\end{enumerate}
+
+\section{Future Work\label{sec:conclusion_future_work}}
+Several extensions could improve both scientific understanding and practical usefulness:
+\begin{enumerate}
+  \item Extend evaluation to other languages such as Java, Python, and TypeScript to compare ecosystem effects.
+  \item Compare multiple LLM models, including GPT 4 class models, Claude, and open source alternatives under the same protocol.
+  \item Evaluate an agent based workflow that integrates tool use for building, testing, and targeted context retrieval, and compare it against the repair loop under controlled conditions.
+  \item Increase scale with more projects and methods to improve generalization and enable stronger statistical conclusions.
+  \item Integrate the approach into developer workflows and IDE plugins to study adoption and productivity effects in realistic settings.
+\end{enumerate}

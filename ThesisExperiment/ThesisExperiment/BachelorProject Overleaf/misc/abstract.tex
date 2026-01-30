@@ -1,0 +1,19 @@
+\thispagestyle{empty}
+\vspace*{1.0cm}
+
+\begin{center}
+    \textbf{Abstract}
+\end{center}
+
+\vspace*{0.5cm}
+
+\noindent
+Unit testing is a key practice for maintaining software quality, but in many real world teams it is underused because writing and maintaining tests is perceived as time intensive. At the same time, large language models (LLMs) can generate code and appear promising as assistants for automated unit test generation. In Csharp projects, however, it remains unclear how reliable LLM generated tests are when applied to realistic codebases with non trivial dependencies and build constraints. This thesis investigates whether LLM based unit test generation can reduce the practical effort barrier and whether iterative repair using build and test feedback improves outcomes compared to single shot generation.
+
+Prior research has mainly focused on Java ecosystems and often reports high compilation failure rates and weak or misleading assertions in generated tests. In addition, many evaluations risk overestimating success when they count passing tests as useful tests without confirming that the intended focal method is executed. This creates a gap for Csharp focused evidence and for evaluation protocols that distinguish technical success from functional success. The problem addressed in this thesis is therefore to quantify reliability and usefulness of LLM generated unit tests for real world Csharp projects under a reproducible protocol, and to identify dominant failure modes that prevent adoption in practice.
+
+A controlled experiment was conducted on five open source Csharp projects with a locked sample of fifty focal methods. Three variants were evaluated: a baseline using existing developer tests, a single shot LLM generation variant using frozen prompts, and a repair loop variant with up to three feedback driven attempts per target. Each run was evaluated using two gates, \texttt{dotnet build} and \texttt{dotnet test}, and a stability check across three consecutive executions. Where available, line coverage was measured to approximate focal execution, and mutation testing was treated as an optional metric due to tooling feasibility.
+
+The baseline established that even mature repositories can contain pre existing test failures, with 60\% of runs passing tests. Single shot generation compiled in only 16.7\% of runs and produced 13.0\% passing tests, but achieved 0.0\% average line coverage on completed runs where coverage was available. Manual inspection revealed a systematic failure mode in which generated tests duplicated production types inside the test file, resulting in passing tests that did not execute the real focal method. The repair loop did not substantially increase compilation success, but it produced the first functional successes with non zero coverage, reaching 19.7\% average line coverage across completed runs. This improvement came at a higher cost, requiring approximately 3.8 times more tokens per run compared to single shot generation.
+
+Overall, the thesis contributes a Csharp focused, reproducible evaluation protocol and an empirical characterization of failure modes that limit LLM based unit test generation in practice. The results suggest that LLMs can assist test scaffolding under strict automated gates, but they are not reliable replacements for deliberate unit testing without additional safeguards such as focal execution checks and constraints against type duplication.

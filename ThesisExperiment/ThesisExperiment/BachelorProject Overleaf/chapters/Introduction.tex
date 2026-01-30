@@ -1,0 +1,80 @@
+\chapter{Introduction\label{cha:chapter1}}
+
+Unit testing is a foundational practice in software engineering. Tests help developers find defects early, enable safe refactoring, and document the expected behavior of code \cite{Myers2011ArtOfSoftwareTesting}. Despite these benefits, writing and maintaining unit tests requires significant effort. Many developers consider testing tedious and time consuming, which leads to inadequate test coverage in real projects.
+
+Automated test generation addresses this problem by creating tests without manual effort. Large language models offer an alternative approach to traditional automation, generating code from natural language or code prompts. However, LLM generated tests are often unreliable. Studies report that a substantial proportion fail to compile or produce weak assertions \cite{Yuan2024FSEChatGPTTests,Yang2024ASEUnitTestEval}. This thesis investigates the reliability of LLM generated unit tests in the dotnet ecosystem and evaluates whether a simple improvement strategy can address these limitations.
+
+\section{Motivation}
+
+Unit testing serves three primary goals: finding defects early, enabling safe refactoring, and documenting expected behavior. Bugs found early are less expensive to fix than bugs found later. Tests provide a safety net when developers modify code, and they serve as executable specifications that stay synchronized with the implementation. These benefits are well established in the software engineering literature \cite{Myers2011ArtOfSoftwareTesting}.
+
+Despite the recognized importance of testing, developers often underinvest in it. Writing tests requires effort that competes with feature development. Maintaining tests as code evolves adds ongoing cost. The result is that many real projects have inadequate test coverage, leaving defects undetected until later stages of development or production.
+
+Automated test generation promises to reduce this burden. In the Java ecosystem, search based tools such as EvoSuite have been studied extensively and can achieve high code coverage on many programs. However, no equivalent tool with comparable maturity exists for C\#. This gap means that developers working in the dotnet ecosystem have fewer automated testing options.
+
+Large language models offer an alternative approach. An LLM is a neural network trained on large corpora of text and code that can generate new code from a natural language or code prompt \cite{Brown2020FewShot,Chen2021CodexEval}. Unlike traditional tools that use search algorithms, LLMs can interpret naming conventions, documentation, and contextual information. This capability has generated interest in using LLMs for automated test generation across multiple programming languages, including C\#. However, the practical reliability of LLM generated tests remains a barrier to adoption, particularly in the dotnet ecosystem where empirical evidence is limited.
+
+\section{Objective}
+
+The goal of this thesis is to evaluate the reliability of LLM generated unit tests for C\# projects and to test whether iterative repair improves compilation success, test execution success, and downstream quality metrics. This goal has three components. First, the thesis compares LLM generated tests to developer written tests serving as the baseline. Both are evaluated on the same projects using the same metrics. Second, the thesis analyzes the types of errors that cause LLM generated tests to fail. This error analysis identifies where the generation process breaks down. Third, the thesis measures the effect of a compile repair loop on compilation rate, test pass rate, code coverage, and mutation score.
+
+The main research question of this thesis is: How does AI test generation compare to traditional baselines on compilation rate, test execution pass rate, code coverage (line and branch), and mutation score for C\# projects, and can iterative repair improve these metrics?
+
+\section{Problem Statement\label{sec:problem}}
+
+LLM generated tests are often unreliable. Studies in other language ecosystems report that a substantial proportion of LLM generated tests fail to compile. Tests that do not compile cannot be executed and provide no value. Beyond compilation, LLM generated tests may also suffer from weak oracles, incorrect API calls, and flaky behavior \cite{Yuan2024FSEChatGPTTests,Yang2024ASEUnitTestEval}.
+
+Compilation success and test execution success function as necessary gates for any generated test. A test must first compile before it can be executed. It must execute without runtime errors before its assertions can reveal faults in the code under test. These two conditions represent minimum reliability requirements that any practical test generation approach must satisfy.
+
+This reliability problem limits the practical adoption of LLM based test generation. Developers cannot trust tests that fail unpredictably or that compile only sometimes. Before LLM generated tests can be useful in practice, their reliability must improve. The problem addressed in this thesis is the unreliability of LLM generated unit tests in the dotnet ecosystem. The focus is on compilation success and test execution success as necessary conditions for usefulness. The thesis investigates whether a simple improvement strategy, specifically a compile repair loop, can increase reliability in a controlled setting.
+
+\section{Thesis Scope}
+
+This thesis has a defined scope that enables a focused investigation within the constraints of a 12 week bachelor thesis.
+
+\textbf{Included in scope:}
+\begin{itemize}
+    \item Unit tests only, defined as tests that verify individual methods in isolation
+    \item C\# as the primary programming language for all experiments
+    \item Open source projects selected with objective, reproducible criteria including build success verification, sufficient public methods, and existing developer written tests
+    \item Developer written tests already present in the selected projects as the baseline for comparison
+    \item One improvement strategy: a compile repair loop with up to three attempts and two gates (build success via dotnet build and test execution success via dotnet test)
+    \item Mutation score as the primary proxy for fault revealing capability
+    \item Related work includes LLM based and agent based approaches to AI assisted testing
+\end{itemize}
+
+\textbf{Excluded from scope:}
+\begin{itemize}
+    \item Integration tests, system tests, and GUI tests
+    \item Java, Python, and other programming languages (discussed in the literature review for context but not part of the experiment)
+    \item Proprietary or commercial codebases
+    \item Multiple improvement strategies or combinations of strategies
+    \item Agent based systems are discussed conceptually in Chapter~3 as a state of the art perspective but are not evaluated experimentally. Evaluating agent based approaches would require controlling for many confounding factors, which is beyond the scope of a bachelor thesis. They are proposed as a direction for future work.
+\end{itemize}
+
+\section{Purpose and goal\label{sec:purpose_and_goal}}
+
+The thesis makes the following contributions:
+
+\begin{enumerate}
+    \item A controlled comparison of single shot LLM generation versus developer written test baselines on a sample of methods from selected C\# projects. The comparison measures compilation rate, test execution pass rate, line coverage, branch coverage, and mutation score.
+    \item An error classification that categorizes failures in LLM generated tests by type. Categories include compilation errors, wrong assertions, missing setup, and flaky behavior.
+    \item An evaluation of whether a compile repair loop with up to three attempts improves these metrics compared to single shot generation.
+    \item Practical observations on when LLM generated tests provide value for C\# projects and what limitations remain.
+\end{enumerate}
+
+\section{Outline\label{sec:outline}}
+
+This thesis is organized into seven chapters.
+
+\textbf{Chapter~\ref{cha:foundations}} covers Foundations and Concepts. This chapter defines the key terms and metrics used throughout the thesis. It covers unit testing fundamentals, traditional test generation approaches and the baseline choice for C\#, LLM based test generation including strengths and weaknesses, quality metrics including coverage and mutation score, and the project selection method used in this study.
+
+\textbf{Chapter~\ref{cha:related_work}} presents Related Work. This chapter synthesizes existing research on LLM test generation by theme rather than paper by paper. It covers the current state of LLM test generation performance, a taxonomy of common errors, proposed improvement strategies including repair loops, and baseline results from traditional tools in other ecosystems. The chapter includes a conceptual discussion of agent based approaches and concludes with a research gap statement.
+
+\textbf{Chapter~\ref{cha:methodology}} describes the Methodology. This chapter describes the research design in reproducible detail. It covers the systematic literature review procedure, the experiment design including project selection, the LLM setup with single shot and repair loop variants, the measurement procedure for all five metrics, and threats to validity.
+
+\textbf{Chapter~\ref{cha:results}} presents the Results. This chapter presents the findings without interpretation. It reports the results of the literature synthesis, the baseline comparison, the error analysis with category distributions, and the effect of the repair loop on compilation rate and downstream metrics.
+
+\textbf{Chapter~\ref{cha:discussion}} contains the Discussion. This chapter interprets the results in context. It explains why results may differ from findings in other ecosystems, compares them to the literature, discusses practical implications for developers using C\#, and acknowledges limitations of the study design.
+
+\textbf{Chapter~\ref{cha:conclusion}} provides the Conclusion. This chapter summarizes the thesis, provides direct answers to each research question with specific numbers from the results, offers recommendations for practitioners, and suggests directions for future work.

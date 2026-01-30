@@ -1,0 +1,1483 @@
+Verlauf / Experiment-Log
+========================
+
+Dieses Dokument protokolliert alle bisher durchgefuehrten Schritte des
+Thesis-Experiments. Das Experiment untersucht, ob ein Large Language Model
+sinnvolle Unit-Tests fuer C#-Methoden aus realen Open-Source-Projekten
+generieren kann. Verglichen werden drei Varianten:
+
+  - Variante A (Baseline): Vorhandene, menschengeschriebene Tests
+  - Variante B (Single-Shot): Ein einzelner LLM-Prompt erzeugt den Test
+  - Variante C (Repair-Loop): Iterative Generierung mit bis zu 3 Versuchen,
+    wobei Fehlermeldungen als Feedback zurueckgefuehrt werden
+
+Die Pipeline besteht aus 8 Schritten (Steps 1-8), von denen bisher
+die ersten fuenf abgeschlossen wurden.
+
+------------------------------------------------------------------------
+Step 1 - Projektauswahl (select-projects)
+------------------------------------------------------------------------
+
+Befehl:   dotnet run -- select-projects --output appendix
+
+Beschreibung:
+  Der Befehl durchsucht GitHub ueber die REST-API nach C#-Repositories mit
+  mehr als 50 Sternen. Fuer jedes gefundene Repository wird automatisch
+  folgendes geprueft:
+
+    1. Git-Clone des Repos in den lokalen Ordner "repos/"
+    2. Build-Versuch mit "dotnet build"
+    3. Erkennung von Test-Projekten (xUnit, NUnit, MSTest)
+    4. Zaehlung der oeffentlichen Methoden via Roslyn-Analyse
+    5. Zaehlung der C#-Codezeilen (LOC)
+
+  Ein Projekt besteht die Filter, wenn:
+    - Der Build erfolgreich ist
+    - Mindestens 1 Test-Projekt vorhanden ist
+    - Mindestens 10 oeffentliche Methoden existieren
+    - Mindestens 1000 Zeilen C#-Code vorhanden sind
+
+Ergebnis:
+  - Insgesamt wurden zahlreiche GitHub-Repositories evaluiert
+    (siehe appendix/project_list_full.csv fuer die vollstaendige Liste)
+  - 21 Projekte haben alle Filter bestanden
+  - Die gefilterte Liste wurde in appendix/project_list_filtered.csv
+    gespeichert
+
+  Die 21 qualifizierten Projekte sind u.a.:
+    - shadowsocks/shadowsocks-windows (59.223 Stars)
+    - NickeManarin/ScreenToGif (26.288 Stars)
+    - OpenRA/OpenRA (16.364 Stars)
+    - QuantConnect/Lean (16.084 Stars)
+    - duplicati/duplicati (14.109 Stars)
+    - App-vNext/Polly (14.104 Stars)
+    - Flow-Launcher/Flow.Launcher (13.514 Stars)
+    - JustArchiNET/ArchiSteamFarm (13.012 Stars)
+    - babalae/better-genshin-impact (12.239 Stars)
+    - LuckyPennySoftware/MediatR (11.831 Stars)
+    - microsoft/garnet (11.683 Stars)
+    - lucasg/Dependencies (11.098 Stars)
+    - dotnet/orleans (10.689 Stars)
+    - gui-cs/Terminal.Gui (10.673 Stars)
+    - Cysharp/UniTask (10.438 Stars)
+    - LuckyPennySoftware/AutoMapper (10.203 Stars)
+    - Tyrrrz/DiscordChatExporter (10.058 Stars)
+    - restsharp/RestSharp (9.819 Stars)
+    - Kareadita/Kavita (9.723 Stars)
+    - FluentValidation/FluentValidation (9.616 Stars)
+    - (+ 1 weiteres Projekt)
+
+Erzeugte Dateien:
+  - appendix/project_list_full.csv     (alle evaluierten Projekte)
+  - appendix/project_list_filtered.csv (nur die 21 bestandenen Projekte)
+
+------------------------------------------------------------------------
+Step 2 - Bereinigung nicht brauchbarer Repos
+------------------------------------------------------------------------
+
+Beschreibung:
+  Nach der automatischen Projektauswahl wurden die geklonten Repositories
+  manuell gesichtet. Projekte, die fuer das Experiment nicht geeignet waren
+  (z.B. wegen zu komplexer Build-Abhaengigkeiten, fehlender Testinfrastruktur
+  oder anderer praktischer Probleme), wurden manuell aus dem "repos/"-Ordner
+  entfernt.
+
+  Dieser manuelle Bereinigungsschritt stellt sicher, dass nur tatsaechlich
+  verwendbare Projekte in den weiteren Pipeline-Schritten beruecksichtigt
+  werden.
+
+------------------------------------------------------------------------
+Step 3 - Umgebungsvariablen konfigurieren (.env)
+------------------------------------------------------------------------
+
+Beschreibung:
+  Die Datei ".env" wurde auf Basis der Vorlage ".env.example" erstellt und
+  mit dem persoenlichen OpenAI API-Key befuellt. Diese Datei wird fuer die
+  spaetere Testgenerierung (Steps 7 und 8) benoetigt, da dort Anfragen an
+  die OpenAI-API gestellt werden.
+
+  Konfigurierte Variablen:
+    - OPENAI_API_KEY : API-Schluessel fuer OpenAI (erforderlich fuer Steps 5+6)
+    - GITHUB_TOKEN   : Optional, erhoehtes Rate-Limit fuer GitHub-API-Zugriffe
+
+  Die .env-Datei ist in .gitignore eingetragen und wird nicht versioniert,
+  um die Sicherheit des API-Keys zu gewaehrleisten.
+
+------------------------------------------------------------------------
+Step 4 - Modellwahl: Upgrade von GPT-3.5-Turbo auf GPT-5-mini
+------------------------------------------------------------------------
+
+Begruendung:
+  Das urspruenglich im Code hardcodierte Modell "gpt-3.5-turbo" ist fuer eine
+  Bachelorarbeit im Jahr 2026 nicht mehr zeitgemaess. Ein Pruefer koennte die
+  Relevanz der Ergebnisse anzweifeln, wenn ein veraltetes Modell verwendet wird.
+
+  Daher wurde eine Modellanalyse durchgefuehrt, um das optimale Modell fuer
+  die Unit-Test-Generierung zu bestimmen.
+
+Modellvergleich (Stand Januar 2026):
+
+  Modell              | Preis/1M Tokens    | Staerken
+                      | (Input / Output)   |
+  --------------------|--------------------|-----------------------------------------
+  gpt-5.2             | $1.75 / $14.00     | Bestes Coding/Agentic, sehr komplex
+  gpt-5.1-codex       | $1.25 / $10.00     | Fuer lange Coding-Workflows optimiert
+  gpt-5-mini          | $0.25 / $2.00      | Sehr gutes Preis-Leistungs-Verhaeltnis
+  gpt-5.1-codex-mini  | $0.25 / $2.00      | Codex-optimiert, gut fuer CI
+  gpt-5-nano          | $0.05 / $0.40      | Ultra-guenstig, fuer einfache Tasks
+
+Entscheidung:
+  Fuer die Bachelorarbeit wird "gpt-5-mini" als primaeres Modell verwendet.
+
+  Gruende:
+    1. Kosteneffizienz: Bei 50 Methoden x 3 Varianten (mit bis zu 3 Repair-
+       Versuchen in Variante C) summieren sich die API-Calls schnell.
+       Mit gpt-5-mini bleiben die Kosten ueberschaubar.
+
+    2. Praxisnaehe: In der Realitaet wuerden Entwickler im CI eher ein
+       kostenguenstiges Modell einsetzen, nicht das teuerste.
+
+    3. Wissenschaftliche Aussagekraft: Wenn ein guenstiges Modell bereits
+       gute Ergebnisse liefert, ist das eine staerkere Aussage. Wenn es
+       scheitert, ist das ebenfalls ein valides Forschungsergebnis.
+
+    4. Aktualitaet: GPT-5-mini ist ein aktuelles Modell (2026), wodurch
+       die Thesis-Ergebnisse relevant und zeitgemaess sind.
+
+Technische Umsetzung:
+  Die Aenderung erfolgt in einer einzigen Datei:
+    - Services/OpenAiService.cs, Zeile 32
+    - Alt: _chatClient = new ChatClient(model: "gpt-3.5-turbo", ...)
+    - Neu: _chatClient = new ChatClient(model: "gpt-5-mini", ...)
+
+API-Test:
+  Vor der Aenderung wurde die OpenAI-API mit dem vorhandenen Key getestet.
+  Der Test war erfolgreich (Modell antwortete korrekt).
+
+  Nach der Aenderung wurde ein erneuter Test mit gpt-5-mini durchgefuehrt:
+    - Ergebnis: ERFOLGREICH
+    - Modell-ID (von API zurueckgegeben): gpt-5-mini-2025-08-07
+    - Das Modell ist einsatzbereit fuer die Testgenerierung.
+
+Status: ABGESCHLOSSEN
+
+Durchgefuehrte Aenderungen:
+  1. Services/OpenAiService.cs, Zeile 32: Modell von "gpt-3.5-turbo" auf
+     "gpt-5-mini" geaendert
+  2. Software_Thesis.txt: Alle Referenzen auf GPT-3.5-Turbo durch GPT-5-mini
+     ersetzt (Dokumentation aktualisiert)
+
+------------------------------------------------------------------------
+Step 5 - Methoden-Sampling (sample-methods)
+------------------------------------------------------------------------
+
+Befehl:   dotnet run -- sample-methods --output appendix
+
+Beschreibung:
+  Dieser Schritt waehlt deterministisch 5 Projekte aus der gefilterten Liste
+  und samplet pro Projekt genau 10 oeffentliche Methoden fuer das Experiment.
+
+  Algorithmus:
+    1. Projekte nach repo_url alphabetisch sortieren
+    2. Fisher-Yates-Shuffle mit festem Seed (42) fuer Reproduzierbarkeit
+    3. Iteriere durch geshuffelte Projekte bis 5 valide gefunden
+    4. Pro Projekt: Methoden extrahieren, alphabetisch sortieren, shufflen
+    5. Erste 10 Methoden pro Projekt samplen
+
+  Exclusion-Kriterien fuer Dateien:
+    - bin/, obj/, generated/, migrations/ (Build-Artefakte)
+    - *test*, *tests, unittest, *.test, *.tests (Test-Code)
+    - *spec*, specs, *.spec (Spec-Dateien)
+
+  Exclusion-Kriterien fuer Methoden:
+    - Equals, GetHashCode, ToString (Standard-Overrides)
+    - Methoden in nicht-oeffentlichen Typen
+
+  Implementierte Fixes vor Ausfuehrung:
+    - Fix 1: Garantiert 5 valide Projekte (iteriert weiter bei Skips)
+    - Fix 2: CSV Commit Hash als Source of Truth (mit checkout)
+    - Fix 3: Duplicate Check auf (RepoUrl, Identifier) Tuple
+
+Durchfuehrung:
+
+  Erster Lauf (mit Fixes 1-3):
+    Nach manueller Validierung der method_list_all.csv wurden 10/50 Methoden
+    aus Test-Ordnern gefunden:
+      - duplicati: 2 (Duplicati.Browser.Test/, UnitTest/)
+      - Kavita: 5 (API.Tests/)
+      - UniTask: 3 (UniTask.NetCoreTests/)
+
+    Ursache: Die ShouldExcludeFile-Methode pruefte nur auf "/test" und "/spec"
+    als Substring, erfasste aber nicht Muster wie "API.Tests", "UnitTest" oder
+    "*.NetCoreTests".
+
+  Fix 4 - Robustere Test-Exclusion:
+    Die ShouldExcludeFile-Methode wurde auf segment-basierte Pruefung umgestellt:
+      - Pfad wird in Segmente aufgeteilt (statt Substring-Match)
+      - Erfasst: *test, *tests, unittest, *.test, *.tests
+      - Erfasst: spec, specs, *spec, *.spec
+      - Case-insensitive pro Segment
+
+    Geaenderte Datei: Commands/SampleMethodsCommand.cs (Zeilen 237-267)
+
+  Zweiter Lauf (mit Fix 4):
+    Ergebnis: 0/50 Methoden aus Test-Pfaden
+    Validierung: grep "test" method_list_all.csv -> keine Treffer
+
+  Git-Commit:
+    4da546f - Complete Step 5: Sample 5 projects with 10 methods each (50 total)
+
+Ergebnis:
+  Ausgewaehlte Projekte (5):
+    1. duplicati/duplicati      - 2036 eligible methods -> 10 sampled
+    2. LuckyPennySoftware/MediatR - 94 eligible methods -> 10 sampled
+    3. App-vNext/Polly          - 917 eligible methods -> 10 sampled
+    4. Kareadita/Kavita         - 2099 eligible methods -> 10 sampled
+    5. Cysharp/UniTask          - 1420 eligible methods -> 10 sampled
+
+  Validierung:
+    - Projekte: 5 (erwartet: 5)        OK
+    - Methoden: 50 (erwartet: 50)      OK
+    - Pro Projekt: je 10 Methoden      OK
+    - Duplikate: 0                     OK
+    - Test-Pfade: 0/50                 OK
+
+Erzeugte Dateien:
+  - appendix/project_list_selected.csv  (5 ausgewaehlte Projekte)
+  - appendix/method_list_all.csv        (50 gesamplete Methoden)
+
+Status: ABGESCHLOSSEN
+
+Hinweis:
+  Die CSV-Dateien sind ab jetzt "frozen" und duerfen nicht mehr veraendert
+  werden, um die Reproduzierbarkeit des Experiments zu gewaehrleisten.
+
+------------------------------------------------------------------------
+Step 5.1 - Pre-Flight Checks vor Step 6
+------------------------------------------------------------------------
+
+Beschreibung:
+  Vor dem Start von Step 6 (collect-baseline) mit allen 50 Methoden wurden
+  Pre-Flight-Checks durchgefuehrt, um die Pipeline zu validieren. Dabei
+  wurden zwei Aenderungen vorgenommen:
+
+1. --limit Option fuer Dry-Runs:
+   Um die Pipeline mit nur einer Methode testen zu koennen, wurde eine
+   --limit Option zu folgenden Commands hinzugefuegt:
+     - collect-baseline --limit N
+     - run-single-shot --limit N
+     - run-repair-loop --limit N
+
+   Geaenderte Dateien:
+     - Program.cs (Option-Definition fuer alle 3 Commands)
+     - Commands/CollectBaselineCommand.cs (limit-Parameter)
+     - Commands/RunSingleShotCommand.cs (limit-Parameter)
+     - Commands/RunRepairLoopCommand.cs (limit-Parameter)
+
+2. Dry Run mit --limit 1:
+   Befehl: dotnet run -- collect-baseline --data-dir appendix --limit 1
+
+   Ergebnis:
+     - Build: PASSED (exit 0)
+     - Tests: FAILED (exit 1) - 3 von 555 Tests fehlgeschlagen (Locale-Issues)
+     - Stryker: Timeout nach 10 Minuten (erwartet, Timeout funktioniert)
+     - RunRecord: Erfolgreich geschrieben
+
+3. Coverage-Bug gefunden und behoben:
+   Problem:
+     Bei der ersten Ausfuehrung wurden 0 Coverage-Reports gefunden, obwohl
+     Tests liefen. Die Coverage-Dateien wurden in einem falschen Pfad
+     abgelegt: repos\duplicati\repos\duplicati\coverage-results\... (doppelt)
+
+   Ursache:
+     Der relative Pfad "--results-directory:coverage-results" wurde von
+     dotnet test relativ zum aktuellen Arbeitsverzeichnis aufgeloest,
+     nicht relativ zum Projektverzeichnis.
+
+   Loesung:
+     In Services/DotnetTestService.cs wurde Path.GetFullPath() verwendet,
+     um absolute Pfade zu garantieren:
+       var absoluteWorkingDir = Path.GetFullPath(workingDirectory);
+       var coverageDir = Path.Combine(absoluteWorkingDir, "coverage-results");
+
+   Verifikation nach Fix:
+     - Coverage Reports: 1 (vorher 0)
+     - lineTotal: 4 (vorher 0)
+     - Pfad korrekt: repos/duplicati/coverage-results/...
+
+Git-Commit:
+  14d4f00 - Add --limit option for dry-run testing and fix coverage path issue
+  (5 Dateien geaendert, 58 Einfuegungen, 14 Loeschungen)
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Step 5.2 - Weitere Pre-Flight Verbesserungen
+------------------------------------------------------------------------
+
+Beschreibung:
+  Nach den initialen Pre-Flight Checks wurden weitere Verbesserungen
+  implementiert, um die Datenqualitaet zu erhoehen und Dry Runs
+  flexibler zu gestalten.
+
+1. --skip Option fuer Dry-Runs:
+   Um verschiedene Projekte testen zu koennen, ohne die CSV-Dateien
+   zu modifizieren, wurde eine --skip N Option hinzugefuegt:
+     - collect-baseline --skip N --limit M
+     - run-single-shot --skip N --limit M
+     - run-repair-loop --skip N --limit M
+
+   Beispiel: --skip 10 --limit 1 testet die 11. Methode (MediatR)
+
+   Geaenderte Dateien:
+     - Program.cs (Option-Definition fuer alle 3 Commands)
+     - Commands/CollectBaselineCommand.cs (skip-Parameter)
+     - Commands/RunSingleShotCommand.cs (skip-Parameter)
+     - Commands/RunRepairLoopCommand.cs (skip-Parameter)
+
+2. Coverage Status Unterscheidung:
+   Problem:
+     Bei MediatR (--skip 10) wurde Coverage = 0 gemeldet, obwohl
+     "Datensammler XPlat Code Coverage nicht gefunden" im Log stand.
+     0% Coverage ist aber semantisch etwas anderes als "Messung
+     nicht moeglich".
+
+   Loesung:
+     CoverageResult.Status unterscheidet jetzt drei Faelle:
+       - "available": Coverage erfolgreich gemessen (kann 0% sein)
+       - "collector_missing": XPlat Code Coverage nicht installiert
+       - "no_report": Collector vorhanden, aber kein Report erzeugt
+
+     Erkennung via Test-Stdout:
+       - Englisch: "Data collector 'XPlat Code Coverage' was not found"
+       - Deutsch: "Datensammler 'XPlat Code Coverage' wurde nicht gefunden"
+
+   Geaenderte Dateien:
+     - Models/CoverageResult.cs (Status-Feld, nullable int? Felder)
+     - Services/CoverletService.cs (IsCollectorMissing-Methode)
+     - Commands/CollectBaselineCommand.cs (testStdout-Uebergabe)
+     - Commands/RunSingleShotCommand.cs (testStdout-Uebergabe)
+     - Commands/RunRepairLoopCommand.cs (testStdout-Uebergabe)
+     - Models/RunFlatRow.cs (CoverageStatus fuer CSV-Export)
+     - Commands/AggregateResultsCommand.cs (CoverageStatus-Mapping)
+
+3. Modell-Update auf GPT-5-mini:
+   In Services/OpenAiService.cs wurde das Modell von "gpt-3.5-turbo"
+   auf "gpt-5-mini" geaendert (siehe Step 4 fuer Begruendung).
+
+Dry Run Ergebnisse:
+  - duplicati (--limit 1): Tests fehlgeschlagen (Locale-Issues),
+    Coverage status: available
+  - MediatR (--skip 10 --limit 1): Tests bestanden (230 tests),
+    Coverage status: collector_missing
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Step 5.3 - Infrastructure-Fixes und Preflight-Tests (28.01.2026)
+------------------------------------------------------------------------
+
+Beschreibung:
+  Nach initialen Dry-Runs wurden systematische Infrastructure-Probleme
+  identifiziert. Diese wurden behoben und anschliessend ein strukturierter
+  Preflight-Test auf allen 5 Projekten durchgefuehrt.
+
+========================================================================
+Teil A: Implementierte Infrastructure-Fixes
+========================================================================
+
+1. dotnet tool restore fuer Stryker (StrykerService.cs)
+   ---------------------------------------------------------
+   Problem:
+     Bei Polly schlug Stryker fehl mit der Meldung "dotnet tool restore"
+     benoetigt. Stryker ist als lokales dotnet-Tool konfiguriert
+     (.config/dotnet-tools.json), muss aber vor der Ausfuehrung
+     wiederhergestellt werden.
+
+   Loesung:
+     - Neue Methode EnsureToolRestoreAsync() in StrykerService.cs
+     - Prueft ob .config/dotnet-tools.json existiert
+     - Fuehrt "dotnet tool restore" einmalig pro Repo aus
+     - Tracking via HashSet<string> _toolRestoredRepos
+     - Fehler werden geloggt aber nicht abgebrochen (soft fail)
+
+   Geaenderte Dateien:
+     - Services/StrykerService.cs (Zeilen 93-131)
+
+2. test.runsettings fuer Locale-Konsistenz (DotnetTestService.cs)
+   ---------------------------------------------------------
+   Problem:
+     Tests schlugen fehl wegen Locale-Unterschieden, z.B.:
+       - duplicati: "Size: 1.5 KB" vs "Size: 1,5 KB"
+       - Testausgabe auf Deutsch statt Englisch
+
+   Loesung:
+     - Neue Datei test.runsettings mit Environment-Variablen:
+         LANG=en_US.UTF-8
+         LC_ALL=en_US.UTF-8
+         DOTNET_CLI_UI_LANGUAGE=en
+     - DotnetTestService sucht automatisch nach test.runsettings
+     - Wird via --settings Flag an dotnet test uebergeben
+     - Fallback auf Projekt-Verzeichnis fuer Development
+
+   Geaenderte/Neue Dateien:
+     - test.runsettings (NEU)
+     - ThesisExperiment.csproj (Content-Include fuer runsettings)
+     - Services/DotnetTestService.cs (Konstruktor + beide Methoden)
+
+   Hinweis:
+     Die runsettings-Datei aendert die CLI-Sprache, aber nicht die
+     Anwendungskultur im Test-Prozess. Einige Locale-abhaengige
+     Tests (z.B. Zahlenformatierung) schlagen weiterhin fehl.
+     Das ist ein Projekt-internes Problem, nicht unsere Pipeline.
+
+3. Stryker Budget-Skip Rule (StrykerService.cs)
+   ---------------------------------------------------------
+   Problem:
+     Bei duplicati hat Stryker 10 Source-Files, jedes mit 10 Min Timeout.
+     Das fuehrt zu ~100 Minuten Wartezeit ohne nuetzliche Daten.
+
+   Loesung:
+     - Nach 2 aufeinanderfolgenden Timeouts fuer ein Repo werden
+       alle weiteren Stryker-Aufrufe uebersprungen
+     - Tracking via Dictionary<string, int> _consecutiveTimeouts
+     - Tracking via HashSet<string> _budgetExceededRepos
+     - MutationResult.Status = "skipped_budget" mit Note
+
+   Neue Status-Werte fuer MutationResult.Status:
+     - "available": Stryker erfolgreich ausgefuehrt
+     - "timeout": Stryker Timeout (einzelne Datei)
+     - "skipped_budget": Uebersprungen nach 2 Timeouts
+     - "error": Stryker-Fehler (Exit Code != 0, Exception, etc.)
+
+   Geaenderte Dateien:
+     - Models/MutationResult.cs (Status + Note Felder)
+     - Services/StrykerService.cs (komplette Ueberarbeitung)
+     - Models/RunFlatRow.cs (MutationStatus fuer CSV)
+     - Commands/AggregateResultsCommand.cs (MutationStatus-Mapping)
+     - Commands/LabelErrorsCommand.cs (MutationStatus-Mapping)
+     - Commands/CollectBaselineCommand.cs (neue API-Signatur)
+     - Commands/RunSingleShotCommand.cs (neue API-Signatur)
+     - Commands/RunRepairLoopCommand.cs (neue API-Signatur)
+
+========================================================================
+Teil B: Preflight-Test Ergebnisse (1 Methode pro Projekt)
+========================================================================
+
+Befehle:
+  dotnet run -- collect-baseline --data-dir appendix --limit 1
+  dotnet run -- collect-baseline --data-dir appendix --skip 10 --limit 1
+  dotnet run -- collect-baseline --data-dir appendix --skip 20 --limit 1
+  dotnet run -- collect-baseline --data-dir appendix --skip 30 --limit 1
+  dotnet run -- collect-baseline --data-dir appendix --skip 40 --limit 1
+
+Ergebnisse:
+
+  +------------+--------+---------+-------------------+-----------------+--------------+
+  | Projekt    | Build  | Tests   | Coverage          | Mutation        | Tool Restore |
+  +------------+--------+---------+-------------------+-----------------+--------------+
+  | duplicati  | PASSED | FAILED  | available (0%)    | timeout         | -            |
+  |            |        | (5/555) |                   |                 |              |
+  +------------+--------+---------+-------------------+-----------------+--------------+
+  | MediatR    | PASSED | PASSED  | collector_missing | available       | -            |
+  |            |        | (398)   |                   | (not in scope)  |              |
+  +------------+--------+---------+-------------------+-----------------+--------------+
+  | Polly      | PASSED | FAILED  | collector_missing | error           | WORKED!      |
+  |            |        |         |                   | (file lock)     |              |
+  +------------+--------+---------+-------------------+-----------------+--------------+
+  | Kavita     | PASSED | FAILED  | available         | available       | -            |
+  |            |        |         | (1 report)        |                 |              |
+  +------------+--------+---------+-------------------+-----------------+--------------+
+  | UniTask    | PASSED | PASSED  | collector_missing | available       | WORKED!      |
+  |            |        | (337)   |                   | (not in scope)  |              |
+  +------------+--------+---------+-------------------+-----------------+--------------+
+
+Detailanalyse:
+
+  1. duplicati:
+     - Build: OK
+     - Tests: 5/555 fehlgeschlagen (Locale-Issues, File-Move-Exceptions)
+       * TestTemplateSerializerFormatSizeHelper: "1.5 KB" vs "1,5 KB"
+       * TestMultiExceptionOnDlist: Assertion-Fehler
+       * RunCommands/RunCommandsWithoutSize: IOException
+     - Coverage: Korrekt gemessen (available), 0% fuer die fokale Methode
+     - Mutation: Timeout nach 10 Min (erwartet, Status korrekt erfasst)
+
+  2. MediatR:
+     - Build: OK
+     - Tests: 398 Tests bestanden (66 DI-Tests + 164+164 Unit-Tests)
+     - Coverage: collector_missing (kein Coverlet installiert)
+     - Mutation: Die fokale Methode (samples/Runner.cs) ist nicht
+       im Stryker-Scope (Note: "File not found in Stryker report")
+     - Outcome: baseline_complete
+
+  3. Polly:
+     - Build: OK
+     - Tests: FAILED (Exit 1)
+     - Coverage: collector_missing (kein Coverlet installiert)
+     - Stryker Tool Restore: ERFOLGREICH ausgefuehrt
+     - Mutation: error wegen File Lock ("file is being used by
+       another process") - Test-Prozess haelt DLL noch
+
+  4. Kavita:
+     - Build: OK
+     - Tests: FAILED (Exit 1)
+     - Coverage: 1 Report gefunden, Messung moeglich
+     - Mutation: OK, keine Timeouts
+
+  5. UniTask:
+     - Build: OK
+     - Tests: 337 Tests bestanden
+     - Coverage: collector_missing (kein Coverlet installiert)
+     - Stryker Tool Restore: ERFOLGREICH ausgefuehrt
+     - Mutation: File not in scope (Runtime-Code, kein Test-Scope)
+     - Outcome: baseline_complete
+
+========================================================================
+Teil C: Validierung der Infrastructure-Fixes
+========================================================================
+
+  Fix 1: dotnet tool restore
+    Status: FUNKTIONIERT
+    Nachweis: Polly und UniTask zeigen "Running dotnet tool restore..."
+              und "Tool restore completed." im Log
+
+  Fix 2: test.runsettings
+    Status: FUNKTIONIERT (teilweise)
+    Nachweis: "Using runsettings: .../test.runsettings" im Log
+    Einschraenkung: Einige Locale-Tests (Zahlenformatierung) schlagen
+                    weiterhin fehl - das ist projekt-internes Problem
+
+  Fix 3: Coverage Status Detection
+    Status: FUNKTIONIERT
+    Nachweis:
+      - duplicati: status = "available"
+      - MediatR/Polly/UniTask: status = "collector_missing"
+      - Kavita: status = "available"
+
+  Fix 4: Mutation Status Detection
+    Status: FUNKTIONIERT
+    Nachweis:
+      - duplicati: status = "timeout" mit Note "Stryker timed out"
+      - MediatR/UniTask: status = "available" mit Note "File not found..."
+      - Polly: status = "error" (file lock)
+      - Kavita: status = "available"
+
+  Fix 5: Budget-Skip Rule
+    Status: NICHT GETESTET (erfordert 2 aufeinanderfolgende Timeouts)
+    Hinweis: Die Logik ist implementiert, aber Preflight mit --limit 1
+             testet nur eine Datei pro Projekt. Wird beim vollen
+             collect-baseline getestet.
+
+========================================================================
+Teil D: Erkenntnisse und Implikationen
+========================================================================
+
+  1. Build-Stabilitaet:
+     Alle 5 Projekte bauen erfolgreich. Die Pipeline ist robust.
+
+  2. Test-Stabilitaet:
+     3/5 Projekte haben fehlschlagende Tests:
+       - duplicati: Locale-Issues (projekt-intern)
+       - Polly: Unbekannte Ursache (noch nicht analysiert)
+       - Kavita: Unbekannte Ursache (noch nicht analysiert)
+     Das ist fuer Variante A (Baseline) akzeptabel - test_failed
+     Records werden trotzdem erfasst.
+
+  3. Coverage-Verfuegbarkeit:
+     3/5 Projekte haben keinen Coverlet-Collector:
+       - MediatR, Polly, UniTask: collector_missing
+     Die Coverage-Werte fuer diese Projekte sind null, nicht 0%.
+     Das ist korrekt im Datenmodell abgebildet.
+
+  4. Mutation-Testing:
+     - Stryker-Timeouts treten bei grossen Repos auf (duplicati)
+     - Einige fokale Methoden sind nicht im Stryker-Scope (samples/)
+     - File-Lock-Probleme bei parallelen Prozessen (Polly)
+
+  5. Analyse-Empfehlung:
+     Fuer die statistische Analyse sollten nur Records mit
+     test_passed oder baseline_complete verwendet werden.
+     Das sind aktuell 2/5 Projekten (MediatR, UniTask).
+
+========================================================================
+Teil E: Naechste Schritte
+========================================================================
+
+  1. Vollstaendiger collect-baseline Lauf:
+     dotnet run -- collect-baseline --data-dir appendix
+     (alle 50 Methoden, Budget-Skip wird aktiv bei Timeouts)
+
+  2. Nach Abschluss: Analyse der RunRecords
+     - Wie viele baseline_complete vs test_failed?
+     - Coverage-Verteilung bei available Status?
+     - Mutation-Daten vorhanden?
+
+  3. Dann: Steps 7+8 (Single-Shot und Repair-Loop)
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Step 5.4 - Thesis-sichere Datenqualitaet Fixes (28.01.2026)
+------------------------------------------------------------------------
+
+Beschreibung:
+  Nach Review der Preflight-Ergebnisse wurden zwei kritische Fixes
+  implementiert, um die Datenqualitaet fuer die Thesis-Auswertung
+  sicherzustellen.
+
+========================================================================
+Fix 1: Mutation Status "not_in_scope"
+========================================================================
+
+Problem:
+  Wenn eine fokale Methode nicht im Stryker-Report gefunden wurde
+  (z.B. samples/ Verzeichnisse), wurde Status = "available" mit
+  Note = "File not found in Stryker report" zurueckgegeben.
+  Das ist semantisch falsch: "available" suggeriert erfolgreiche Messung.
+
+Loesung:
+  Neuer Status "not_in_scope" fuer Dateien ausserhalb des Stryker-Scope.
+
+Geaenderte Datei:
+  - Services/StrykerService.cs (Zeile 125)
+    Status = "available" -> Status = "not_in_scope"
+
+Auswirkung auf Auswertung:
+  - "available" = Mutation gemessen (auch wenn mutantsTotal = 0)
+  - "not_in_scope" = Nicht messbar (Datei ausserhalb Scope)
+  - "timeout" = Nicht messbar (Zeit-Budget ueberschritten)
+  - "skipped_budget" = Nicht messbar (Repo-Budget ueberschritten)
+  - "error" = Nicht messbar (technischer Fehler)
+
+========================================================================
+Fix 2: File-Lock Retry mit Build-Server Shutdown
+========================================================================
+
+Problem:
+  Bei Polly hielt der Test-Prozess nach Ausfuehrung noch DLL-Locks,
+  wodurch Stryker mit "file is being used by another process" fehlschlug.
+
+Loesung:
+  Retry-Logik mit automatischer Recovery:
+  1. Initialer 2-Sekunden Delay vor Stryker (File-Handles freigeben)
+  2. Stryker ausfuehren
+  3. Falls File-Lock Error erkannt:
+     a) "dotnet build-server shutdown" ausfuehren
+     b) 2-Sekunden Delay
+     c) Stryker erneut versuchen (1x Retry)
+  4. Erst dann als "error" markieren
+
+Geaenderte Datei:
+  - Services/StrykerService.cs
+    * ExecuteStrykerWithStatusAsync() refaktoriert (Zeilen 202-227)
+    * Neue Methode TryExecuteStrykerAsync() (Zeilen 229-263)
+    * Neue Methode IsFileLockError() (Zeilen 265-270)
+    * Neue Methode ShutdownBuildServerAsync() (Zeilen 272-284)
+
+File-Lock Erkennung:
+  - "being used by another process"
+  - "cannot access the file"
+
+========================================================================
+Verifikation: Polly Dry Run
+========================================================================
+
+Befehl:
+  dotnet run -- collect-baseline --data-dir appendix --skip 20 --limit 1
+
+Ergebnis:
+  - File Lock wurde erkannt: "File lock detected, attempting recovery..."
+  - Build-Server Shutdown ausgefuehrt
+  - RunRecord erfolgreich geschrieben
+  - Mutation Status: "available" (mutantsTotal = 0, korrekt fuer 2-Zeilen-Methode)
+  - Coverage Status: "collector_missing" (korrekt)
+
+Log-Auszug:
+  Stryker exited with code -532462766
+  stderr: ... file is being used by another process ...
+  File lock detected, attempting recovery...
+  Running dotnet build-server shutdown...
+  Writing 1 RunRecords...
+  Wrote: Polly__Polly.AsyncRetrySyntax.RetryAsync_...A.json
+
+========================================================================
+Thesis-methodische Hinweise (dokumentiert)
+========================================================================
+
+1. available + mutantsTotal = 0:
+   Behandeln als "measured but no mutants generated", nicht als 0% Score.
+   In Auswertung separat zaehlen.
+
+2. test_failed Runs:
+   Nicht mit baseline_complete Runs in Coverage/Mutation-Statistiken mischen.
+   Separat berichten (Anteil, Ursachen, Beispiele).
+
+3. Unterscheidung "0%" vs "nicht messbar":
+   - Gemessen, keine Abdeckung: Wert = 0.00, Status = available
+   - Nicht messbar: Wert = null, Status = collector_missing/timeout/error/etc.
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Step 6 - collect-baseline (Variante A) - 28.01.2026
+------------------------------------------------------------------------
+
+Befehl:   dotnet run -- collect-baseline --data-dir appendix
+
+Beschreibung:
+  Erfassung der bestehenden menschengeschriebenen Tests (Variante A) fuer
+  alle 50 Methoden aus den 5 Projekten. Pro Methode werden Build, Tests,
+  Coverage (Coverlet) und Mutation-Testing (Stryker.NET) ausgefuehrt.
+
+========================================================================
+Ergebnis
+========================================================================
+
+  Gesamtstatistik:
+    - RunRecords erstellt: 50 / 50 (100%)
+    - Build erfolgreich:   50 / 50 (100%)
+    - Tests bestanden:     30 / 50 (60%)
+    - Tests fehlgeschlagen: 20 / 50 (40%)
+
+  Aufschluesselung nach Projekt:
+
+    +------------+-------+------+------+----------------------------------+
+    | Projekt    | Total | Pass | Fail | Ursache der Failures             |
+    +------------+-------+------+------+----------------------------------+
+    | duplicati  |  10   |   0  |  10  | Locale-Issues (1.5 KB vs 1,5 KB) |
+    |            |       |      |      | Timing-Probleme, IOExceptions    |
+    +------------+-------+------+------+----------------------------------+
+    | MediatR    |  10   |  10  |   0  | -                                |
+    +------------+-------+------+------+----------------------------------+
+    | Polly      |  10   |   0  |  10  | Pre-existing Test-Failures       |
+    |            |       |      |      | (Validation-Tests)               |
+    +------------+-------+------+------+----------------------------------+
+    | Kavita     |  10   |  10  |   0  | -                                |
+    +------------+-------+------+------+----------------------------------+
+    | UniTask    |  10   |  10  |   0  | -                                |
+    +------------+-------+------+------+----------------------------------+
+
+  Git-Commit: a760596
+
+========================================================================
+Herausforderungen und Loesungen
+========================================================================
+
+1. Windows MAX_PATH Limitation (KRITISCH)
+   ------------------------------------------
+   Problem:
+     Der Run crashte bei UniTask Methode #8 mit dem Fehler:
+       "System.IO.IOException: Die Syntax fuer den Dateinamen,
+        Verzeichnisnamen oder die Datentraegerbezeichnung ist falsch."
+
+     Ursache: Generische Methoden mit vielen Typparametern erzeugten
+     Dateinamen, die Windows MAX_PATH (260 Zeichen) ueberschritten:
+
+       UniTask__Cysharp.Threading.Tasks.Linq.UniTaskAsyncEnumerable.
+       GroupJoinAwaitWithCancellation_TOuter__TInner__TKey__TResult__
+       IUniTaskAsyncEnumerable_TOuter__IUniTaskAsyncEnumerable_TInner__
+       Func_TOuter__CancellationToken__UniTask_TKey___Func_TInner__
+       CancellationToken__UniTask_TKey___Func_TOuter__IEnumerable_TInner___
+       CancellationToken__UniTask_TResult_____A.json
+
+   Loesung:
+     JsonLogger.cs wurde erweitert um:
+       - Erkennung von zu langen Pfaden (> 250 Zeichen)
+       - Automatische Trunkierung des Identifiers
+       - Anhaengen eines 8-Zeichen SHA256-Hash fuer Eindeutigkeit
+
+     Beispiel nach Fix:
+       UniTask__Cysharp.Threading.Tasks.Linq.UniTaskAsyncEnumerable.
+       GroupJoinAwaitWithCancellation_TOuter__TInner__TKey__TResult__
+       IUniTaskAsyncEnumerable_TOuter__IUniTaskAsyncEnumerable_TInner__
+       Func_TOuter__CancellationToken__UniTask_T_be2624c0__A.json
+
+   Geaenderte Datei:
+     - Services/JsonLogger.cs
+       * using System.Security.Cryptography hinzugefuegt
+       * GetOutputPath() erweitert mit Laengenpruefung
+       * Neue Methode ComputeShortHash() fuer SHA256-Hashing
+
+2. Persistente File-Lock Probleme bei Stryker
+   ------------------------------------------
+   Problem:
+     Trotz des in Step 5.4 implementierten Retry-Mechanismus mit
+     "dotnet build-server shutdown" traten bei Polly und Kavita
+     weiterhin File-Lock-Fehler auf:
+       "file is being used by another process"
+
+   Auswirkung:
+     - Alle 10 Stryker-Runs fuer Polly: status = "error"
+     - Einige Stryker-Runs fuer Kavita: status = "error"
+
+   Ursache-Analyse:
+     Windows haelt File-Handles laenger als Unix-Systeme. Der Test-
+     Prozess oder MSBuild-Worker halten DLLs noch, waehrend Stryker
+     bereits versucht, sie zu modifizieren.
+
+   Workaround:
+     Die RunRecords wurden trotzdem erfolgreich erstellt. Mutation-
+     Daten sind fuer diese Projekte nicht verfuegbar, aber Coverage-
+     und Test-Daten wurden erfasst.
+
+   Moegliche zukuenftige Verbesserung:
+     - Laengere Delays zwischen Test und Stryker
+     - Parallele Stryker-Runs vermeiden
+     - GC.Collect() vor Stryker aufrufen (wenn moeglich)
+
+3. Budget-Skip Rule funktionierte korrekt
+   ------------------------------------------
+   Bei duplicati wurden nach 2 aufeinanderfolgenden Stryker-Timeouts
+   die verbleibenden 8 Source-Files automatisch uebersprungen:
+
+     Stryker: src/.../Utility/DistinctByExtensionMethod.cs
+     Stryker timed out after 10 minutes (exit code 2).
+     Stryker: src/.../JsonWebHelperHttpClient.cs
+     Stryker timed out after 10 minutes (exit code 2).
+     Budget exceeded for duplicati. Skipping remaining Stryker runs.
+     [8 files skipped with status = "skipped_budget"]
+
+   Ersparnis: ~80 Minuten Wartezeit pro vollem Run.
+
+4. Pre-existing Test-Failures
+   ------------------------------------------
+   20/50 Tests schlugen fehl - nicht wegen unserer Pipeline, sondern
+   wegen bereits bestehender Probleme in den Repositories:
+
+   duplicati (10/10 Failures):
+     - Locale-abhaengige String-Vergleiche ("1.5 KB" vs "1,5 KB")
+     - IOException bei File-Move-Operationen
+     - Timing-sensitive Tests
+
+   Polly (10/10 Failures):
+     - Validation-Tests mit DataAnnotations-Issues
+     - Integration-Tests die externe Services erwarten
+
+   Implikation fuer Thesis:
+     Diese Failures sind projekt-intern und betreffen Variante A
+     (Baseline) genauso wie B und C. Fuer den Vergleich der Varianten
+     sind sie neutral, sollten aber in der Thesis dokumentiert werden.
+
+========================================================================
+Erzeugte Dateien
+========================================================================
+
+  RunRecords (50 Dateien):
+    - runs/*.json (eine Datei pro Methode)
+
+  Aggregierte Auswertung:
+    - appendix/aggregates/runs_flat.csv (50 Zeilen, Rohdaten)
+    - appendix/aggregates/summary_by_variant.csv
+    - appendix/aggregates/summary_by_status.csv
+    - appendix/aggregates/summary_by_project.csv
+    - appendix/aggregates/aggregate_report.md
+
+========================================================================
+Interpretation fuer die Thesis
+========================================================================
+
+  1. Die 30 "baseline_complete" Records (MediatR, Kavita, UniTask)
+     bilden die saubere Vergleichsbasis fuer Varianten B und C.
+
+  2. Die 20 "test_failed" Records (duplicati, Polly) sollten separat
+     analysiert werden - sie zeigen, dass auch menschengeschriebene
+     Tests nicht immer stabil sind.
+
+  3. Coverage-Daten sind nur fuer duplicati und Kavita verfuegbar
+     (Projekte mit Coverlet-Installation).
+
+  4. Mutation-Daten sind eingeschraenkt verfuegbar:
+     - duplicati: timeout/skipped_budget (zu gross)
+     - Polly/Kavita: error (file locks)
+     - MediatR/UniTask: not_in_scope (fokale Methoden in samples/)
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Step 7 - run-single-shot Preflight (Variante B) - 29.01.2026
+------------------------------------------------------------------------
+
+Beschreibung:
+  Vor dem vollen Run wurden Preflight-Checks durchgefuehrt, um die
+  OpenAI-Integration und Pipeline zu validieren. Dabei wurden zwei
+  kritische Probleme mit GPT-5-mini entdeckt und behoben.
+
+========================================================================
+Problem 1: Temperature Parameter nicht unterstuetzt
+========================================================================
+
+Fehler:
+  HTTP 400 (invalid_request_error: unsupported_value)
+  "temperature does not support 0.2 with this model.
+   Only the default (1) value is supported."
+
+Ursache:
+  GPT-5-mini unterstuetzt keine benutzerdefinierten Temperature-Werte.
+  Der urspruengliche Code setzte Temperature = 0.2f.
+
+Loesung:
+  Temperature-Parameter aus ChatCompletionOptions entfernt.
+
+Geaenderte Datei:
+  - Services/OpenAiService.cs (Zeile 47)
+    * Temperature = 0.2f entfernt
+    * Kommentar hinzugefuegt: "GPT-5-mini only supports temperature=1.0"
+
+========================================================================
+Problem 2: Leere API-Responses (Content = "")
+========================================================================
+
+Symptom:
+  Nach Behebung von Problem 1 gab die API erfolgreiche Responses
+  zurueck (HTTP 200), aber das "content"-Feld war leer:
+
+    {
+      "choices": [{
+        "message": {
+          "role": "assistant",
+          "content": "",        // <-- LEER trotz 4096 completion_tokens!
+          "refusal": null
+        },
+        "finish_reason": "length"
+      }],
+      "usage": {
+        "completion_tokens": 4096  // Tokens wurden generiert, aber kein Text!
+      }
+    }
+
+Ursache:
+  GPT-5-mini ist ein Reasoning-Modell und gibt standardmaessig nur
+  interne Reasoning-Tokens aus, aber keinen sichtbaren Text-Content.
+  Dies ist ein bekanntes Problem, dokumentiert in:
+    - https://github.com/openai/openai-python/issues/2546
+    - https://community.openai.com/t/gpt-5-mini-responses-api-empty-output-text-issue/1342786
+
+Loesung:
+  ReasoningEffortLevel auf "Low" setzen, damit das Modell Text ausgibt:
+
+    #pragma warning disable OPENAI001 // Experimental API
+    var options = new ChatCompletionOptions
+    {
+        MaxOutputTokenCount = 4096,
+        ReasoningEffortLevel = ChatReasoningEffortLevel.Low
+    };
+    #pragma warning restore OPENAI001
+
+Geaenderte Datei:
+  - Services/OpenAiService.cs (Zeilen 45-53)
+    * MaxOutputTokenCount von 2048 auf 4096 erhoeht
+    * ReasoningEffortLevel = ChatReasoningEffortLevel.Low hinzugefuegt
+    * Pragma-Direktiven fuer experimentelle API hinzugefuegt
+
+========================================================================
+Preflight-Ergebnisse (1 Methode pro Projekt)
+========================================================================
+
+Befehle:
+  dotnet run -- run-single-shot --output appendix --limit 1
+  dotnet run -- run-single-shot --output appendix --skip 10 --limit 1
+  dotnet run -- run-single-shot --output appendix --skip 20 --limit 1
+  dotnet run -- run-single-shot --output appendix --skip 30 --limit 1
+  dotnet run -- run-single-shot --output appendix --skip 40 --limit 1
+
+Ergebnisse:
+
+  +------------+------------------+----------------------------------------+
+  | Projekt    | Status           | Details                                |
+  +------------+------------------+----------------------------------------+
+  | duplicati  | build_failed     | Code generiert, kompiliert nicht       |
+  +------------+------------------+----------------------------------------+
+  | MediatR    | build_failed     | Code generiert, kompiliert nicht       |
+  +------------+------------------+----------------------------------------+
+  | Polly      | test_failed      | BUILD PASSED! Test schlug fehl         |
+  +------------+------------------+----------------------------------------+
+  | Kavita     | build_failed     | Code generiert, kompiliert nicht       |
+  +------------+------------------+----------------------------------------+
+  | UniTask    | no_test_project  | Unity-Struktur ohne Standard-.csproj   |
+  +------------+------------------+----------------------------------------+
+
+Validierung:
+  - OpenAI API funktioniert mit ReasoningEffortLevel.Low    OK
+  - Code-Extraktion aus LLM-Response                        OK
+  - Test-Datei-Generierung                                  OK
+  - Build-Ausfuehrung                                       OK
+  - Test-Ausfuehrung mit Filter                             OK
+  - RunRecords werden korrekt geschrieben                   OK
+
+Hinweis:
+  Die build_failed/test_failed Ergebnisse sind ERWARTET fuer Single-Shot.
+  Nicht alle LLM-generierten Tests kompilieren beim ersten Versuch.
+  Das ist genau das, was die Thesis untersucht!
+
+Status: PREFLIGHT ABGESCHLOSSEN - Bereit fuer vollen Run
+
+------------------------------------------------------------------------
+Naechste Schritte (ausstehend)
+------------------------------------------------------------------------
+
+  Step 7 - run-single-shot (voller Run):
+    dotnet run -- run-single-shot --output appendix
+    Generierung von Tests per einzelnem LLM-Prompt (Variante B).
+    Gated Pipeline: Build -> Test -> Flakiness -> Coverage -> Mutation.
+
+  Step 8 - run-repair-loop:
+    Iterative Testgenerierung mit Fehler-Feedback (Variante C, max. 3 Versuche).
+
+  Step 9 - aggregate-results:
+    Aggregation aller RunRecord-JSONs zu CSV-Dateien und Markdown-Reports.
+
+  Step 10 - label-errors:
+    Klassifikation aller Fehler nach standardisierten Kategorien.
+
+------------------------------------------------------------------------
+Step 7.1 - Prompt-Versionierung und voller Run (Variante B) - 29.01.2026
+------------------------------------------------------------------------
+
+Beschreibung:
+  Nach den Preflight-Tests wurde die Prompt-Template-Versionierung
+  eingefuehrt und der volle Variante B Run durchgefuehrt.
+
+========================================================================
+Teil A: Prompt-Versionierung (v1.0 -> v1.1)
+========================================================================
+
+Hintergrund:
+  Die urspruenglichen Prompts (v1.0) wurden waehrend der Preflight-Phase
+  verwendet. Fuer den produktiven Run wurde eine verbesserte Version
+  (v1.1) erstellt mit strengeren Constraints fuer die Code-Generierung.
+
+Aenderungen in v1.1:
+  1. Enforced exactly one csharp code block output
+     - Verhindert multiple Code-Bloecke oder Markdown-Formatierungsfehler
+
+  2. Required minimal compilable file
+     - using statements MUESSEN enthalten sein
+     - Test-Klasse MUSS vollstaendig sein (nicht nur Methode)
+
+  3. Forbidden assuming extra mocking or assertion libraries
+     - Kein Moq, NSubstitute, FluentAssertions, AutoFixture, Bogus
+     - Nur Standard-Framework-Assertions
+
+  4. Clarified temp file rules
+     - Guid.NewGuid() nur fuer Isolation von Temp-Pfaden
+     - Keine Assertions auf Guid-Werte
+
+  5. Repair prompt enforces minimal changes
+     - Prioritaet 1: Compile-Fehler beheben
+     - Prioritaet 2: Runtime-Fehler beheben
+     - Prioritaet 3: Bei unklarem Verhalten -> einfache Invarianten testen
+
+Neue Dateien:
+  - prompts/v1.1/single_shot.txt   (System + User Prompt fuer Variante B)
+  - prompts/v1.1/repair_attempt.txt (System + User Prompt fuer Variante C)
+  - prompts/v1.1/Manifest.txt      (Versionsdokumentation, FROZEN)
+
+Geaenderte Dateien:
+  - Services/PromptTemplateService.cs
+    * SingleShotTemplatePath: "prompts/v1.1/single_shot.txt"
+    * RepairTemplatePath: "prompts/v1.1/repair_attempt.txt"
+    * TemplateVersion => "v1.1"
+
+Behandlung von v1.0 Pilot-Records:
+  - Die 5 Preflight-Records aus v1.0 wurden nach runs/pilot_v1.0/ verschoben
+  - Sie werden nicht in der Hauptauswertung beruecksichtigt
+  - Dienen als Dokumentation der iterativen Entwicklung
+
+========================================================================
+Teil B: Voller Variante B Run (run-single-shot)
+========================================================================
+
+Befehl:   dotnet run -- run-single-shot --output appendix
+
+Ergebnis:
+
+  Gesamtstatistik:
+    - RunRecords erstellt: 50 / 50 (100%)
+    - Completed (stabile Tests): 7 / 50 (14%)
+    - Build Failed: 32 / 50 (64%)
+    - Test Failed: 1 / 50 (2%)
+    - No Test Project: 10 / 50 (20%)
+
+  Aufschluesselung nach Projekt:
+
+    +------------+-------+-----------+-------+-------+---------------+
+    | Projekt    | Total | completed | build | test  | no_test_proj  |
+    |            |       |           | fail  | fail  |               |
+    +------------+-------+-----------+-------+-------+---------------+
+    | duplicati  |  10   |     0     |  10   |   0   |       0       |
+    +------------+-------+-----------+-------+-------+---------------+
+    | MediatR    |  10   |     2     |   8   |   0   |       0       |
+    +------------+-------+-----------+-------+-------+---------------+
+    | Polly      |  10   |     0     |  10   |   0   |       0       |
+    +------------+-------+-----------+-------+-------+---------------+
+    | Kavita     |  10   |     5     |   4   |   1   |       0       |
+    +------------+-------+-----------+-------+-------+---------------+
+    | UniTask    |  10   |     0     |   0   |   0   |      10       |
+    +------------+-------+-----------+-------+-------+---------------+
+
+  Erfolgreiche Methoden (7):
+    MediatR:
+      - RequestHandlerWrapperImpl<TRequest>.Handle
+      - MediatRServiceCollectionExtensions.AddMediatR
+
+    Kavita:
+      - MigrateSmartFilterEncoding.Migrate
+      - ReaderController.GetThumbnail
+      - LogHub.SendLogAsObject
+      - KoreaderBookDtoBuilder.WithDocument
+      - StatsService.GetServerInfoSlim
+
+========================================================================
+Teil C: Analyse der Ergebnisse
+========================================================================
+
+1. Build-Erfolgsquote nach Projekt:
+   --------------------------------
+   - Kavita:    60% (6/10 kompilieren)
+   - MediatR:   20% (2/10 kompilieren)
+   - duplicati:  0% (0/10 kompilieren)
+   - Polly:      0% (0/10 kompilieren)
+   - UniTask:   N/A (keine Test-Infrastruktur)
+
+   Beobachtung: Kavita hat die hoechste Erfolgsquote. Das Projekt hat
+   eine einfachere Architektur mit weniger externen Dependencies.
+
+2. Hauptursachen fuer build_failed:
+   ---------------------------------
+   - Fehlende using-Statements (trotz v1.1 Constraints)
+   - Falsche Namespace-Referenzen
+   - Nicht existierende Typen angenommen
+   - Komplexe generische Signaturen falsch reproduziert
+
+3. UniTask Sonderfall:
+   --------------------
+   Alle 10 UniTask-Methoden zeigen "no_test_project", weil:
+   - Unity-Projekt ohne Standard-.csproj Test-Struktur
+   - Source-Files liegen unter Assets/Plugins/ (Unity-Konvention)
+   - Kein dotnet test kompatibles Test-Projekt vorhanden
+
+   Implikation fuer Thesis: UniTask-Methoden sollten in der Analyse
+   separat behandelt oder ausgeschlossen werden.
+
+4. Coverage und Mutation bei completed Runs:
+   -----------------------------------------
+   - Line Coverage: 0% (Tests kompilieren, aber Focal-Method nicht aufgerufen)
+   - Branch Coverage: 0%
+   - Mutation Score: 0% (keine Mutanten generiert)
+
+   Interpretation: Die generierten Tests sind "compilable stubs" -
+   sie bestehen, aber testen nicht die Focal-Methode. Dies ist ein
+   bekanntes Problem bei LLM-generiertem Code und sollte in der
+   Thesis diskutiert werden.
+
+5. Token-Verbrauch:
+   -----------------
+   - Total Tokens: ~84.000
+   - Durchschnitt pro Run: ~1.555 Tokens
+   - Prompt Tokens: ~37.000
+   - Completion Tokens: ~47.000
+   - Geschaetzte Kosten: ~$0.11 (bei $0.25/$2.00 per 1M Tokens)
+
+========================================================================
+Teil D: Technische Beobachtungen
+========================================================================
+
+1. File-Lock Probleme bei Kavita Stryker:
+   Die File-Lock Recovery (dotnet build-server shutdown) half nicht
+   bei allen Kavita-Runs. Stryker zeigt "error" Status, aber die
+   RunRecords wurden trotzdem als "completed" markiert (weil Build+Test
+   erfolgreich waren).
+
+2. not_in_scope Status funktioniert:
+   MigrateSmartFilterEncoding.Migrate zeigte korrekt:
+   "Mutation: % (0/0) [status: not_in_scope]"
+   Die Focal-Datei war nicht im Stryker-Projekt-Scope.
+
+3. v1.1 Prompt-Verbesserungen:
+   - Code-Extraktion funktionierte zuverlaessig (genau 1 Code-Block)
+   - Weniger Markdown-Formatierungsfehler als bei v1.0 Preflight
+
+========================================================================
+Teil E: Vergleich mit Variante A (Baseline)
+========================================================================
+
+  +----------------+-------------+-------------+
+  | Metrik         | Variante A  | Variante B  |
+  +----------------+-------------+-------------+
+  | Build Pass     |    100%     |    16.7%    |
+  +----------------+-------------+-------------+
+  | Test Pass      |     60%     |     13%     |
+  +----------------+-------------+-------------+
+  | Stable Pass    |     60%     |     13%     |
+  +----------------+-------------+-------------+
+  | Flaky          |      0      |      0      |
+  +----------------+-------------+-------------+
+
+  Beachte: Variante A Test Pass ist nur 60% wegen pre-existierender
+  Failures in duplicati und Polly. Bei "sauberen" Projekten (MediatR,
+  Kavita, UniTask) waere Variante A bei 100%.
+
+========================================================================
+Naechste Schritte
+========================================================================
+
+  1. Step 8 - run-repair-loop (Variante C):
+     Iterative Reparatur der fehlgeschlagenen Tests mit bis zu 3 Versuchen.
+     Kann die 32 build_failed und 1 test_failed verbessern?
+
+  2. Aggregation und Analyse:
+     - Vergleich der drei Varianten
+     - Statistische Auswertung
+     - Fehler-Kategorisierung
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Step 8 - run-repair-loop (Variante C) - 29.01.2026
+------------------------------------------------------------------------
+
+Beschreibung:
+  Iterative Test-Reparatur mit Fehler-Feedback (RepairPolicy RP-1.0).
+  Ziel: Die 40 fehlgeschlagenen Variante-B Tests reparieren durch
+  bis zu 3 Versuche mit kontextueller Fehlermeldung.
+
+========================================================================
+Teil A: RepairPolicy RP-1.0 Implementation
+========================================================================
+
+Vor dem Run wurden folgende Erweiterungen am Datenmodell implementiert:
+
+1. ExperimentInfo.cs erweitert:
+   - RepairPolicyVersion: "RP-1.0" (Traceability)
+   - SourceVariantBRunId: Verknuepfung zum B-Record
+
+2. OutcomeInfo.cs erweitert:
+   - FailureClass: Klassifikation aus B-Record
+     * build_failed: Kompilierungsfehler
+     * test_failed: Test schlug fehl
+     * not_focal_copy: Test besteht, aber kopiert die Focal-Klasse
+     * not_focal: Test besteht, Coverage 0%, unbekannte Ursache
+   - SuccessLevel: 4-stufige Erfolgsbewertung
+     * "": Build fehlgeschlagen
+     * "compiled": Build OK, Tests fehlgeschlagen
+     * "green_not_focal": Tests bestanden, Coverage 0%
+     * "focal_executed": Tests bestanden, Coverage > 0%
+
+3. Robuste not_focal Erkennung:
+   - CS0436-Erkennung: Prueft auf Typ-Konflikt im Build-Output
+   - Regex-Pruefung: Sucht nach duplizierten Klassendefinitionen
+   - Kombinierte Heuristik fuer zuverlaessige Klassifikation
+
+4. Spezielle ERROR_MESSAGE fuer not_focal_copy:
+   Das LLM erhaelt bei "Kopie-Problem" Faellen eine detaillierte Anweisung:
+     "The test passes but does not execute the focal method. You MUST:
+      1. REMOVE any class/interface definitions that duplicate types
+      2. ADD proper 'using' statements to import the REAL types
+      3. Instantiate and call the REAL ClassName.MethodName
+      4. DO NOT recreate the focal class or its dependencies"
+
+5. Idempotenz:
+   Falls ein C-Record bereits existiert, wird er uebersprungen.
+   Ermoeglicht Unterbrechung und Wiederaufnahme des Runs.
+
+========================================================================
+Teil B: Repair-Targets aus Variante B
+========================================================================
+
+Befehl:   dotnet run -- run-repair-loop --runs runs --max-attempts 3
+
+Aus den 50 Variante-B Records wurden 38 Repair-Targets identifiziert:
+
+  +------------------+--------+
+  | Failure Class    | Anzahl |
+  +------------------+--------+
+  | build_failed     |   32   |
+  +------------------+--------+
+  | test_failed      |    1   |
+  +------------------+--------+
+  | not_focal_copy   |    5   |
+  +------------------+--------+
+  | Total            |   38   |
+  +------------------+--------+
+
+Ausgeschlossen:
+  - no_test_project: 10 (UniTask - keine Test-Infrastruktur)
+  - completed (Coverage > 0): 2 (bereits erfolgreich)
+
+========================================================================
+Teil C: Ergebnis des vollen Runs
+========================================================================
+
+  Gesamtstatistik:
+    - RunRecords erstellt: 38 / 38 (100%)
+    - Completed (stabile Tests): 6 / 38 (15.8%)
+    - Build Failed: 32 / 38 (84.2%)
+    - Idempotenz-Skips: 1 (vorheriger Teillauf)
+
+  Aufschluesselung nach Projekt:
+
+    +------------+-------+-----------+-------+-------------------+
+    | Projekt    | Total | completed | build | Focal Executed    |
+    |            |       |           | fail  |                   |
+    +------------+-------+-----------+-------+-------------------+
+    | duplicati  |  10   |     0     |  10   |        0          |
+    +------------+-------+-----------+-------+-------------------+
+    | Kavita     |  10   |     6     |   4   |        2          |
+    +------------+-------+-----------+-------+-------------------+
+    | MediatR    |   8   |     0     |   8   |        0          |
+    +------------+-------+-----------+-------+-------------------+
+    | Polly      |  10   |     0     |  10   |        0          |
+    +------------+-------+-----------+-------+-------------------+
+
+  Erfolgreiche Reparaturen (6 completed):
+
+    Kavita - green_not_focal (Coverage 0%):
+      - ReaderController.GetThumbnail
+      - ReadingProfileController.BulkAddReadingProfile
+      - MigrateSmartFilterEncoding.Migrate
+      - CacheService.CleanupBookmarks
+
+    Kavita - focal_executed (Coverage > 0%):
+      - KoreaderBookDtoBuilder.WithDocument (100% Line Coverage!)
+      - StatsService.GetServerInfoSlim (18.18% Line Coverage!)
+
+========================================================================
+Teil D: Analyse der Ergebnisse
+========================================================================
+
+1. Echte Erfolge (focal_executed):
+   ---------------------------------
+   Nur 2 von 38 Reparaturen (5.3%) erreichten tatsaechliche Coverage:
+
+   a) KoreaderBookDtoBuilder.WithDocument:
+      - FailureClass: not_focal_copy
+      - Attempt: 1/3 (sofort erfolgreich nach RP-1.0 Anweisung)
+      - Line Coverage: 100%
+      - Das LLM folgte der Anweisung und importierte die echte Klasse
+
+   b) StatsService.GetServerInfoSlim:
+      - FailureClass: not_focal_copy
+      - Attempt: 1/3
+      - Line Coverage: 18.18%
+      - Teilweise Ausfuehrung der Focal-Methode
+
+2. Technische Erfolge (green_not_focal):
+   -------------------------------------
+   4 weitere Tests kompilieren und bestehen, aber mit Coverage 0%.
+   Das LLM erstellt syntaktisch korrekte Tests, die aber die Focal-
+   Methode nicht aufrufen (Mock-Objekte, Stub-Implementierungen).
+
+3. Persistente Build-Failures:
+   ---------------------------
+   32 von 38 Targets (84%) blieben build_failed nach 3 Versuchen.
+
+   Ursachen-Analyse:
+   - Komplexe Dependency-Graphen (duplicati, Polly)
+   - Fehlende Kontext-Informationen im Prompt
+   - Generische Type-Constraints nicht korrekt reproduziert
+   - Interne Interfaces/Klassen nicht zugaenglich
+
+4. Projekt-spezifische Beobachtungen:
+   -----------------------------------
+   - Kavita: 60% Repair-Erfolg (einfachere Architektur)
+   - duplicati: 0% (zu komplexe Dependencies)
+   - MediatR: 0% (Extension-Methods schwer zu testen)
+   - Polly: 0% (Fluent-API schwer zu instanziieren)
+
+========================================================================
+Teil E: Vergleich aller drei Varianten
+========================================================================
+
+  +----------------+-------------+-------------+-------------+
+  | Metrik         | Variante A  | Variante B  | Variante C  |
+  |                | (Baseline)  | (Single)    | (Repair)    |
+  +----------------+-------------+-------------+-------------+
+  | Total Runs     |     50      |     54      |     38      |
+  +----------------+-------------+-------------+-------------+
+  | Build Pass     |    100%     |    16.7%    |    15.8%    |
+  +----------------+-------------+-------------+-------------+
+  | Test Pass      |     60%     |     13%     |    15.8%    |
+  +----------------+-------------+-------------+-------------+
+  | Stable Pass    |     60%     |     13%     |    15.8%    |
+  +----------------+-------------+-------------+-------------+
+  | Avg Coverage   |     N/A     |     0%      |   19.7%     |
+  +----------------+-------------+-------------+-------------+
+  | Tokens Used    |      0      |   83.961    |  223.340    |
+  +----------------+-------------+-------------+-------------+
+
+  Kernerkenntnisse:
+  -----------------
+  1. COVERAGE-VERBESSERUNG: Variante C erreicht 19.7% durchschnittliche
+     Line-Coverage gegenueber 0% bei Variante B. Die RP-1.0 Anweisung
+     gegen das "Kopie-Problem" war wirksam.
+
+  2. KOMPILIERUNGSRATE STAGNIERT: Die Build-Erfolgsrate verbesserte sich
+     kaum (16.7% -> 15.8%). Das LLM kann komplexe Build-Fehler auch
+     mit Feedback nicht zuverlaessig beheben.
+
+  3. KOSTEN-FAKTOR: Variante C verbraucht 3.8x mehr Tokens als B
+     (~5.877 vs ~1.555 pro Run). Bei persistenten Build-Failures
+     werden 3x so viele API-Calls ausgefuehrt ohne Erfolg.
+
+  4. PROJEKT-ABHAENGIGKEIT: Der Erfolg haengt stark vom Projekt ab.
+     Kavita (einfache Struktur) zeigt gute Ergebnisse, waehrend
+     komplexe Projekte (Polly, duplicati) unloesbar bleiben.
+
+========================================================================
+Teil F: Methodische Implikationen fuer die Thesis
+========================================================================
+
+1. Erfolgs-Definition:
+   - Technical Success: Build + Tests bestanden (vergleichbar mit Literatur)
+   - Functional Success: + Focal erreicht (Coverage > 0) (echte Qualitaet)
+
+   Variante B erreicht 14% Technical Success aber 0% Functional Success.
+   Variante C erreicht 15.8% Technical Success und 5.3% Functional Success.
+
+2. Das "Kopie-Problem":
+   Das LLM "betruegt" systematisch, indem es Focal-Klassen kopiert statt
+   importiert. Dies wurde durch RP-1.0 teilweise behoben, aber nicht
+   vollstaendig eliminiert (4/6 completed sind noch green_not_focal).
+
+3. Empfehlung fuer zukuenftige Forschung:
+   - Prompt v1.2 mit explizitem FORBIDDEN-Block fuer Klassenkopien
+   - Statische Analyse des generierten Codes vor Ausfuehrung
+   - Automatische Injektion von "using"-Statements
+
+========================================================================
+Teil G: Erzeugte Dateien
+========================================================================
+
+  RunRecords (38 neue Dateien):
+    - runs/*_C.json (eine Datei pro Repair-Target)
+
+  Aggregierte Auswertung (aktualisiert):
+    - appendix/aggregates/runs_flat.csv (142 Zeilen: 50 A + 54 B + 38 C)
+    - appendix/aggregates/summary_by_variant.csv
+    - appendix/aggregates/summary_by_status.csv
+    - appendix/aggregates/summary_by_project.csv
+    - appendix/aggregates/aggregate_report.md
+
+Status: ABGESCHLOSSEN
+
+------------------------------------------------------------------------
+Zusammenfassung des Experiments
+------------------------------------------------------------------------
+
+Das Experiment ist nun vollstaendig abgeschlossen. Alle drei Varianten
+wurden auf 50 Methoden aus 5 Open-Source C#-Projekten angewendet:
+
+  Variante A (Baseline):     50 Records - Menschengeschriebene Tests
+  Variante B (Single-Shot):  54 Records - Ein LLM-Prompt pro Methode
+  Variante C (Repair-Loop):  38 Records - Bis zu 3 Reparaturversuche
+
+Hauptergebnisse:
+  - LLM-generierte Tests kompilieren in nur ~16% der Faelle
+  - Von den kompilierenden Tests erreichen nur ~5% echte Coverage
+  - Das "Kopie-Problem" ist ein systematisches LLM-Verhaltensmuster
+  - Der Repair-Loop verdreifacht die Token-Kosten bei minimalem Nutzen
+  - Projektkomplexitaet ist der wichtigste Erfolgspraediktor
+
+Alle Rohdaten liegen als JSON-RunRecords vor und koennen fuer die
+statistische Auswertung in der Thesis verwendet werden.

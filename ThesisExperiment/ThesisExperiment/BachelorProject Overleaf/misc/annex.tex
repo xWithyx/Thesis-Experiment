@@ -1,0 +1,114 @@
+\addchap{Annex}
+\begin{appendix}
+
+% A: Dataset Freeze and Inputs
+\section{Dataset freeze and input lists\label{app:dataset_freeze}}
+
+\subsection{Dataset freeze metadata\label{app:dataset_freeze_meta}}
+This thesis uses a locked dataset of five projects and fifty focal methods. The dataset freeze records the prompt version, template hash, git commit, record counts, and generation timestamp.
+
+% Option 1: include JSON as listing (recommended)
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  columns=fullflexible,
+  breaklines=true,
+  frame=single,
+  captionpos=b
+}
+\begin{lstlisting}[caption={Dataset freeze metadata (dataset\_freeze.json)},label={lst:dataset_freeze}]
+% Insert your appendix/dataset_freeze.json here
+% Example structure:
+% {
+%   "variant_b": {
+%     "promptVersion": "v1.1",
+%     "templateFile": "prompts/v1.1/single_shot.txt",
+%     "templateHash": "<sha256>",
+%     "gitCommit": "<commit-hash>",
+%     "recordCount": 50,
+%     "generatedAt": "2026-01-29T09:11:00Z"
+%   }
+% }
+\end{lstlisting}
+
+\subsection{Selected projects\label{app:selected_projects}}
+The final project selection used in the experiment is provided as CSV.
+
+% If you keep files under an appendix folder in Overleaf:
+% \lstinputlisting[caption={Selected project list (project\_list\_selected.csv)},label={lst:project_selected}]{appendix/project_list_selected.csv}
+
+\subsection{Sampled focal methods\label{app:sampled_methods}}
+The sampled methods (five projects with ten methods each) are provided as a CSV export.
+
+% \lstinputlisting[caption={Sampled focal methods (method\_list\_all.csv)},label={lst:method_list_all}]{appendix/method_list_all.csv}
+
+% B: Prompt Templates
+\section{Prompt templates and versions\label{app:prompts}}
+
+\subsection{Prompt manifest\label{app:prompt_manifest}}
+Variant B uses the frozen prompt template version v1.1. The prompt manifest documents template files and placeholders.
+
+\begin{lstlisting}[caption={Prompt template manifest (v1.1)},label={lst:prompt_manifest}]
+% Paste your Prompt Template Manifest here
+% Include: version, date, frozen status, files, placeholders
+\end{lstlisting}
+
+\subsection{Single shot prompt (v1.1)\label{app:prompt_single_shot}}
+\begin{lstlisting}[caption={Single shot generation prompt (v1.1)},label={lst:prompt_single_shot}]
+% Paste prompts/v1.1/single_shot.txt here
+\end{lstlisting}
+
+\subsection{Repair prompt (v1.1)\label{app:prompt_repair}}
+\begin{lstlisting}[caption={Repair prompt (v1.1)},label={lst:prompt_repair}]
+% Paste prompts/v1.1/repair_attempt.txt here
+\end{lstlisting}
+
+% C: Experiment Outputs and Aggregation
+\section{Experiment outputs and aggregation\label{app:outputs}}
+
+\subsection{RunRecord schema (summary)\label{app:runrecord_schema}}
+Each run produces a JSON RunRecord with metadata (variant, project, method identifier, prompt version), build and test outputs, and optional quality metrics.
+
+\begin{lstlisting}[caption={RunRecord fields (high level)},label={lst:runrecord_schema}]
+RunRecord:
+  Experiment: Variant, Project, MethodIdentifier, PromptVersion, RepairPolicyVersion
+  Request: Prompt, Placeholders
+  Response: ExtractedCode, TokenUsage
+  Build: Gate1 result, Stdout, Stderr
+  Test: Gate2 result, Stdout, Stderr
+  Coverage: Status, LinePercent, BranchPercent
+  Mutation: Status, Score (when available)
+  Outcome: FinalStatus, FailureClass, SuccessLevel
+\end{lstlisting}
+
+\subsection{Aggregated results tables\label{app:aggregated_tables}}
+The aggregation step exports one flat CSV row per RunRecord and generates summary tables.
+
+% You can include tables as CSV listings if needed:
+% \lstinputlisting[caption={runs\_flat.csv},label={lst:runs_flat}]{appendix/runs_flat.csv}
+% \lstinputlisting[caption={summary\_by\_variant.csv},label={lst:summary_variant}]{appendix/summary_by_variant.csv}
+
+\subsection{Final report\label{app:final_report}}
+A markdown report is generated that summarizes the full run.
+
+% \lstinputlisting[caption={aggregate\_report.md},label={lst:aggregate_report}]{appendix/aggregate_report.md}
+
+% D: Reproduction Commands
+\section{Reproduction commands\label{app:commands}}
+The following commands reproduce the main pipeline steps.
+
+\begin{lstlisting}[caption={Pipeline commands (overview)},label={lst:commands}]
+# Variant A: Baseline
+dotnet run -- run-baseline --runs runs
+
+# Variant B: Single shot generation
+dotnet run -- run-single-shot --runs runs
+
+# Variant C: Repair loop (max 3 attempts per target)
+dotnet run -- run-repair-loop --runs runs --max-attempts 3
+
+# Aggregation
+dotnet run -- aggregate-results --runs runs --output appendix
+\end{lstlisting}
+
+\end{appendix}
+\endinput

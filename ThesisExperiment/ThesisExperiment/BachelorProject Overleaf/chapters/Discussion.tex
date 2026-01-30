@@ -1,0 +1,49 @@
+\chapter{Discussion\label{cha:discussion}}
+This chapter interprets the results of the controlled experiment and connects them to existing research. In addition, it discusses practical implications for real development settings, where time pressure often limits the use of unit testing.
+
+\section{Interpretation of Results\label{sec:discussion_interpretation}}
+The baseline results show that real projects frequently contain pre existing test issues. In this study, Variant A reached a test pass rate of 60\%, while 40\% of baseline runs failed due to repository level test problems. This matters because it reflects the practical starting point many teams face: test suites are not always stable, and adopting or extending tests can already be costly before any new tests are written.
+
+Variant B (single shot generation) achieved only a low compilation pass rate and produced no functional success when focal execution was required. A key observation was that passing tests can still be misleading. Several generated tests compiled and passed, but they did not execute the focal method. Instead, they duplicated production types inside the test file, creating a local copy that shadowed the real implementation. This explains why line coverage remained at 0\% for completed Variant B runs where coverage was available. The result highlights that a naive success definition such as tests pass is insufficient for LLM based test generation.
+
+Across all variants, the stability check did not detect flaky outcomes; the observed failure patterns were dominated by compilation failures rather than non deterministic test behavior. Most targets that failed at build time remained build failed after multiple repair attempts. This suggests that the dominant barrier is not assertion quality but missing project context, complex dependencies, and required setup that cannot be inferred reliably from the provided focal method snippet. However, Variant C did achieve the first non zero coverage on completed runs. In a subset of cases, the repair loop successfully removed type duplication and forced execution of the real focal method, resulting in measurable line coverage. This indicates that iterative feedback can convert some misleading successes into functional tests, but only for cases that are close to working.
+
+From a developer perspective, this is the most important takeaway. In practice, teams may hope that an LLM can replace writing unit tests because writing tests is perceived as time intensive. The results suggest that single shot generation is not reliable enough to serve as a replacement in real Csharp projects, especially when project context and dependencies are non trivial. The repair loop can provide value for a limited subset of methods, but it increases cost and still does not solve the hardest cases.
+
+\section{Comparison to Literature\label{sec:discussion_literature}}
+Recent empirical studies report mixed success for LLM based unit test generation, often focusing on Java and JUnit ecosystems. Several works highlight that compilation failures are common and that generated tests may require iterative refinement with feedback, tool support, or additional context \cite{Schaefer2024,Yuan2024,Yang2024,Siddiq2024}. The findings of this thesis are consistent with these observations. Compilation is the main bottleneck, and iterative repair can improve outcomes when the failure is local and explainable through compiler or test feedback.
+
+This study also extends the discussion by showing a failure mode that is easy to overlook in automatic evaluation: tests that compile and pass but do not execute the intended focal method. The type duplication and shadowing behavior illustrates a construct validity threat for evaluation setups that count passing tests as success. In this work, the focal execution requirement and coverage based checks address this threat directly.
+
+Coverage and mutation metrics are widely used to reason about test adequacy \cite{Zhu1997,Jia2011}. The results support the view that compilation and pass rates alone are insufficient indicators of usefulness. Where coverage is available, it provides a stronger signal for whether a generated test actually interacts with the target code. Mutation testing is a stronger adequacy signal in principle, but in practice it can be expensive and may not be available for all targets in an automated pipeline.
+
+Finally, flakiness is a known issue in testing, especially in large projects \cite{Luo2014}. While this experiment included a flakiness check, the primary limiting factor was compilation rather than unstable assertions. This suggests that, for this dataset, improving context and build correctness would likely yield larger gains than focusing on flakiness mitigation.
+
+\section{Practical Implications\label{sec:discussion_implications}}
+The practical question motivating this thesis is whether an LLM can replace manual unit testing effort in a real development setting. Based on the results, the most realistic conclusion is that LLMs can assist, but they do not replace deliberate test design and project aware setup.
+
+The following implications are directly actionable for teams considering LLM assisted testing in Csharp:
+\begin{enumerate}
+  \item Treat compilation as the first quality gate. If an LLM cannot compile in the target solution, the output has no value. Automated pipelines should fail fast on \texttt{dotnet build}.
+  \item Do not accept passing tests without focal execution checks. Add a rule such as line coverage greater than 0 for the focal method where coverage is available, or an alternative call detection heuristic. This prevents misleading green tests.
+  \item Add guardrails against type duplication. Detect compiler warnings such as CS0436 and reject tests that define production like types in the test file. This should be a hard fail, not a warning.
+  \item Prefer LLM assistance for low dependency methods and well structured projects. In this sample, successful outcomes were concentrated in Kavita, which suggests that projects with less complex setup and fewer implicit dependencies may be more amenable to LLM assisted test generation than heavily integrated code paths.
+
+  \item Use repair loops strategically. Iterative repair is most useful for near miss cases, where compiler errors are localized. It becomes expensive and ineffective when the root cause is missing architecture context.
+  \item Integrate in CI instead of relying on manual review. A developer workflow should automatically run build, test, and coverage checks on generated tests, and only propose changes when gates pass.
+\end{enumerate}
+
+For teams with little or no testing culture, a realistic adoption path is to use LLMs for scaffolding and as a teaching tool rather than as a replacement. For example, an LLM can propose an initial Arrange Act Assert structure and help identify edge cases, while developers retain responsibility for correctness, meaningful assertions, and dependency setup.
+
+\section{Limitations\label{sec:discussion_limitations}}
+This study has several limitations that restrict generalization:
+\begin{enumerate}
+  \item Sample size and selection. The experiment evaluates five projects and fifty methods. The results are exploratory and may not represent all Csharp ecosystems.
+  \item Model and prompt configuration. The experiment used GPT 5 mini (API identifier \texttt{gpt-5-mini-2025-08-07}) with frozen prompts.
+Different models or prompt strategies may yield different outcomes.
+  \item Context constraints. Only the focal method and limited class context were provided. In real developer workflows, additional context such as documentation, dependency graphs, and project conventions might improve results.
+  \item Metric availability. Coverage and mutation metrics were measured where available. In cases without collector support or where tooling failed, functional success must be interpreted cautiously.
+  \item Automation constraints. The pipeline intentionally avoided human intervention. In practice, developers may edit generated tests, which could increase success rates but would change the evaluation protocol.
+\end{enumerate}
+
+Despite these limitations, the experiment provides a transparent and reproducible protocol and highlights failure modes that are relevant for practitioners, especially in environments where tests are rarely written due to perceived time cost.

@@ -1,0 +1,112 @@
+\chapter{Methodology\label{cha:methodology}}
+This chapter describes the research design and the controlled experiment used to evaluate LLM based unit test generation for real world Csharp  projects. The description is intended to be reproducible and is aligned with the recorded run artifacts (RunRecords and aggregated CSV exports).
+
+\section{Problem statement\label{sec:problem_statement}}
+Recent work reports that LLM generated unit tests often fail to compile or do not provide meaningful validation in practice. For the .NET ecosystem, it is still unclear how reliable LLM based test generation is on real open source projects, and whether iterative repair using compiler and test feedback can improve reliability.
+
+\section{Research question\label{sec:research_question}}
+The main research question is:
+
+\begin{quote}
+How does LLM based unit test generation compare to existing developer written tests on compilation rate, test execution pass rate, code coverage, and mutation score for selected Csharp projects, and can an iterative repair loop improve these metrics compared to single shot generation
+\end{quote}
+
+Sub questions are operationalized as:
+\begin{enumerate}
+  \item Performance comparison: What are compilation rate, pass rate, and the available quality metrics for baseline, single shot generation, and repair loop generation
+  \item Error analysis: What categories of failures occur (for example compilation errors, failing assertions, missing setup, or non focal tests)
+  \item Improvement testing: Does the repair loop improve compilation rate, pass rate, and focal execution compared to single shot generation
+\end{enumerate}
+
+\section{Research design\label{sec:research_design}}
+The thesis uses a controlled experiment on a fixed sample of open source Csharp projects and focal methods. Three variants are compared:
+\begin{enumerate}
+  \item Variant A: baseline based on existing developer written tests
+  \item Variant B: single shot LLM test generation without feedback
+  \item Variant C: LLM test generation with up to three attempts using build or test feedback (repair loop)
+\end{enumerate}
+
+All variants are executed under identical tooling and logging rules. The experiment produces one RunRecord per execution, stored as JSON, and an aggregated CSV export used for analysis.
+
+\section{Dataset and sampling\label{sec:dataset_sampling}}
+\subsection{Project selection}
+Candidate repositories are collected from GitHub and filtered by objective criteria: successful build, at least one test project, at least ten eligible public methods, and a minimum code size threshold. From the filtered set, five projects are selected deterministically using a fixed random seed. The final selected projects are:
+\begin{itemize}
+  \item duplicati
+  \item MediatR
+  \item Polly
+  \item Kavita
+  \item UniTask
+\end{itemize}
+
+\subsection{Method selection}
+For each selected project, eligible public methods are extracted via static analysis and sampled deterministically using the same fixed seed. The locked sample size is five projects with ten methods each (fifty methods total). The sampled method list is stored in the appendix as CSV for reproducibility.
+
+\subsection{Frozen inputs and traceability}
+After sampling, the project list and method list are treated as frozen inputs and are not modified. Prompt templates are versioned and stored. Each RunRecord contains metadata to trace the prompt version and experiment variant.
+
+\section{Model and prompt templates\label{sec:model_and_prompts}}
+The primary model is GPT 5 mini. The exact model identifier returned by the API is recorded in the logs for reproducibility. Prompt templates are versioned, and Variant B uses the frozen prompt version v1.1. Templates enforce deterministic tests, forbid external services, and restrict file system access to temporary paths created and cleaned up within the test.
+
+\section{Experiment execution\label{sec:execution}}
+\subsection{Common execution pipeline}
+Each focal method is evaluated using two gates:
+\begin{enumerate}
+  \item Gate 1 build: \texttt{dotnet build}
+  \item Gate 2 test: \texttt{dotnet test} with a filter that executes only the generated test
+\end{enumerate}
+
+If Gate 1 fails, the attempt is considered a compilation failure. If Gate 1 passes but Gate 2 fails, the attempt is considered a failing test.
+
+\subsection{Variant A baseline}
+Variant A executes the existing test suite for each project and records whether tests pass for the focal method context. This variant establishes a baseline and also reveals pre existing repository test failures that can affect downstream comparisons.
+
+\subsection{Variant B single shot generation}
+Variant B generates exactly one test per focal method using the v1.1 prompt template. The generated test is compiled and executed using the same gates. Because multiple Variant B records can exist due to pilot runs and reruns, analysis applies a dedup rule: for each method identifier, only one record is used, preferring the most recent record with prompt version v1.1.
+
+\subsection{Variant C repair loop}
+Variant C applies a repair loop with a maximum of three attempts per repair target. The previous generated test and an error message are fed back into the repair prompt. The error message is selected based on the failure class:
+\begin{itemize}
+  \item build failed: compiler output is provided
+  \item test failed: test output is provided
+  \item not focal copy: a targeted instruction forbids duplicating production types and requires calling the real focal method
+\end{itemize}
+
+Only Variant B records that are repair eligible are included. Records with no test project are excluded.
+
+\section{Metrics and success criteria\label{sec:metrics_success}}
+\subsection{Primary metrics}
+The experiment tracks:
+\begin{itemize}
+  \item Compilation rate (build pass)
+  \item Test execution pass rate (test pass)
+  \item Stability (flakiness check)
+\end{itemize}
+
+A test is considered stable if it produces the same outcome across three consecutive runs under identical conditions. Flaky tests are defined as tests with inconsistent outcomes across these three runs.
+
+\subsection{Coverage and focal execution}
+Code coverage is measured where the coverage collector is available. To avoid reporting misleading successes, the analysis distinguishes:
+\begin{itemize}
+  \item Technical success: build passes and tests pass (stable)
+  \item Functional success: the focal method is executed at least once (observed via coverage greater than zero when coverage is available)
+\end{itemize}
+
+\subsection{Mutation testing}
+Mutation testing is executed where feasible using Stryker.NET. Results include explicit status values that distinguish measured outcomes from not measurable outcomes (for example timeouts, not in scope, or tool errors). Mutation score is interpreted only when mutation results are available.
+
+\section{Data artifacts and aggregation\label{sec:data_artifacts}}
+Each execution produces a JSON RunRecord that includes the prompt metadata, extracted test code, build output, test output, coverage results where available, and token usage. Aggregation produces:
+\begin{itemize}
+  \item \texttt{runs\_flat.csv} with one row per RunRecord
+  \item summary tables by variant, status, and project
+  \item a markdown report for the final run overview
+\end{itemize}
+
+The final aggregated dataset contains 142 RunRecords across all variants, consisting of 50 Variant A records, 54 Variant B records, and 38 Variant C records. For Variant B, the dedup rule described above is applied during statistical analysis.
+
+\section{Validity considerations\label{sec:validity}}
+Internal validity is addressed by deterministic sampling, fixed seeds, stable run checks, and full logging. Construct validity is improved by explicitly detecting cases where a passing test does not execute the focal method (for example due to type duplication). External validity is limited by the sample size and the selected projects, and conclusions are framed as exploratory.
+
+\section{Summary\label{sec:methodology_summary}}
+The methodology defines a reproducible experiment comparing baseline tests, single shot LLM generated tests, and a repair loop approach on a fixed sample of fifty focal methods from five Csharp  projects. The experiment uses build and test gates, a stability check across three runs, and quality metrics measured where available. All artifacts are persisted as JSON RunRecords and aggregated into CSV exports for analysis.

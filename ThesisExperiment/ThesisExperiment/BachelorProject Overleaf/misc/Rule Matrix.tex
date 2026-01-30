@@ -1,0 +1,33 @@
+\section{Rule Matrix (Experiment Protocol)\label{sec:rule_matrix}}
+
+\begin{table}[h]
+\centering
+\footnotesize
+\caption{Rule matrix for the controlled experiment (locked protocol and evaluation rules)}
+\label{tab:rule_matrix}
+\begin{tabular}{p{3.2cm} p{4.3cm} p{6.0cm}}
+\hline
+\textbf{Rule category} & \textbf{Rule (locked decision)} & \textbf{Implementation / Evidence} \\
+\hline
+Scope & Language: Csharp & All target repositories are Csharp projects; build and test executed via \texttt{dotnet}. \\
+Sampling & Projects: 5 (locked) & \texttt{project\_list\_selected.csv} (appendix). \\
+Sampling & Methods per project: 10 (locked), total 50 & \texttt{method\_list\_all.csv} (appendix). \\
+Sampling & Selection seed: 42 & Recorded in experiment config and documented in experiment log. \\
+Variants & A: Baseline, B: Single shot, C: Repair loop & Variant tag stored per RunRecord; aggregated in \texttt{runs\_flat.csv}. \\
+Model & Model: GPT-5-mini (\texttt{gpt-5-mini-2025-08-07}) & Stored in RunRecord metadata; referenced in methodology and tool configuration. \\
+Prompt control & Prompt version frozen: v1.1 for Variant B & Prompt manifest + RunRecord fields \texttt{promptVersion}, template path, and hash (appendix). \\
+Gates & Gate 1: \texttt{dotnet build} must pass & Build logs stored in each RunRecord; status contributes to \texttt{build\_failed}. \\
+Gates & Gate 2: \texttt{dotnet test} must pass & Test logs stored in each RunRecord; status contributes to \texttt{test\_failed}. \\
+Stability & Flakiness check: 3 consecutive runs & Stability execution recorded; flaky outcomes counted (observed: 0). \\
+Repair loop & Variant C max attempts: 3 per target & RepairPolicy RP-1.0 recorded; per-target attempts stored in Variant C RunRecords. \\
+Repair policy & Not-focal handling via injected error message (RP-1.0) & FailureClass \texttt{not\_focal\_copy} and CS0436 detection documented; used in repair prompt context. \\
+Metrics & Compilation rate, pass rate & Derived from RunRecord outcomes; summarized in \texttt{summary\_by\_variant.csv}. \\
+Metrics & Line/branch coverage (where available) & Coverage status distinguishes available vs unavailable; summarized with non-zero detection. \\
+Metrics & Mutation score (where available) & Mutation status includes unavailable and timeout; reported only where tool succeeds. \\
+Success definition & Technical success: compiled + tests pass & Represented as passing both gates; reported as completed in B/C. \\
+Success definition & Functional success: focal executed (coverage $>$ 0 where available) & SuccessLevel classification (\texttt{focal\_executed} vs \texttt{green\_not\_focal}); supported by coverage values. \\
+Traceability & Each run produces persisted artifacts & JSON RunRecords per variant (A/B/C) + aggregated exports in appendix. \\
+Reproducibility & Aggregation from raw artifacts & \texttt{aggregate\_results} command generates \texttt{runs\_flat.csv} and summaries from JSON logs. \\
+\hline
+\end{tabular}
+\end{table}

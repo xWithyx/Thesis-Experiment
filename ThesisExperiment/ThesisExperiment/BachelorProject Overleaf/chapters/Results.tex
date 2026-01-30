@@ -1,0 +1,93 @@
+\chapter{Results\label{cha:results}}
+This chapter reports the empirical outcomes of the controlled experiment on LLM based unit test generation for real world Csharp projects. Results are derived from the stored JSON RunRecords and the aggregated CSV exports.
+
+\section{Dataset overview\label{sec:results_overview}}
+In total, 142 RunRecords were parsed and aggregated. The dataset consists of 50 runs for Variant A (baseline), 54 runs for Variant B (single shot generation), and 38 runs for Variant C (repair loop). Variant B includes pilot and rerun records in the raw aggregation. For statistical analysis, Variant B can be deduplicated to one record per method identifier, preferring the most recent record with prompt version v1.1 (as defined in the experiment log).
+
+\section{Outcome distribution by variant\label{sec:results_outcomes}}
+Table \ref{tab:status_breakdown} summarizes the final outcome counts by variant.
+
+\begin{table}[h]
+\centering
+\caption{Status breakdown by variant}
+\label{tab:status_breakdown}
+\begin{tabular}{lrrrrr}
+\hline
+Variant & Total & Completed & Build failed & Test failed & No test project \\
+\hline
+A (Baseline) & 50 & 0 & 0 & 20 & 0 \\
+B (Single shot) & 54 & 7 & 34 & 2 & 11 \\
+C (Repair loop) & 38 & 6 & 32 & 0 & 0 \\
+\hline
+\end{tabular}
+
+\vspace{2mm}
+\footnotesize
+Note: Variant A uses the status \texttt{baseline\_complete} rather than \texttt{completed}. In Variant A, 30 out of 50 runs passed tests.
+\end{table}
+
+To compare the variants at the gate level, Table \ref{tab:pass_rates} reports build pass rate and test pass rate.
+
+\begin{table}[h]
+\centering
+\caption{Pass rates by variant}
+\label{tab:pass_rates}
+\begin{tabular}{lrrr}
+\hline
+Variant & Build pass rate & Test pass rate & Completed rate \\
+\hline
+A (Baseline) & 100.0\% & 60.0\% & 0.0\% \\
+B (Single shot) & 16.7\% & 13.0\% & 13.0\% \\
+C (Repair loop) & 15.8\% & 15.8\% & 15.8\% \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Coverage and focal execution\label{sec:results_coverage}}
+Coverage was measured where the coverage collector was available. Coverage metrics are computed for completed runs only.
+
+\begin{table}[h]
+\centering
+\caption{Coverage on completed runs}
+\label{tab:coverage_completed}
+\begin{tabular}{lrr}
+\hline
+Variant & Completed runs (N) & Average line coverage \\
+\hline
+B (Single shot) & 7 & 0.0\% \\
+C (Repair loop) & 6 & 19.7\% \\
+\hline
+\end{tabular}
+\end{table}
+
+For Variant B, completed runs did not execute the focal method where coverage was available, resulting in 0.0\% line coverage. Manual inspection of the generated test code confirmed cases where production types were duplicated inside the test file, which prevents execution of the real focal method.
+
+For Variant C, the repair loop produced completed runs with non zero focal execution in a subset of cases. Two repaired tests achieved focal execution (coverage greater than 0):
+\begin{itemize}
+  \item \texttt{KoreaderBookDtoBuilder.WithDocument(string)} with 100.00\% line coverage
+  \item \texttt{StatsService.GetServerInfoSlim()} with 18.18\% line coverage
+\end{itemize}
+The remaining completed Variant C runs passed tests but still did not execute the focal method (0.00\% line coverage).
+
+\section{Token usage\label{sec:results_tokens}}
+Table \ref{tab:token_usage} summarizes token consumption for the LLM based variants.
+
+\begin{table}[h]
+\centering
+\caption{Token usage by variant}
+\label{tab:token_usage}
+\begin{tabular}{lrrr}
+\hline
+Variant & Total tokens & Average tokens per run & Relative to single shot \\
+\hline
+B (Single shot) & 83,961 & 1,555 & 1.0x \\
+C (Repair loop) & 223,340 & 5,877 & 3.8x \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Project level highlights\label{sec:results_projects}}
+At the project level, successful LLM outcomes were concentrated in the Kavita project. Variant B achieved the highest number of completed runs in Kavita, while duplicati and Polly predominantly resulted in build failures. Variant C improved average coverage on completed runs primarily through repaired Kavita targets.
+
+\section{Summary\label{sec:results_summary}}
+Variant A establishes a baseline test pass rate of 60.0\%. Variant B shows low build pass and test pass rates and no focal execution on completed runs where coverage is available. Variant C does not substantially increase compilation success, but it achieves the first non zero average line coverage on completed runs, at a token cost approximately 3.8 times higher than single shot generation.

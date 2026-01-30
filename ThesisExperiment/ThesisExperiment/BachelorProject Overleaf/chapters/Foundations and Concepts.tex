@@ -1,0 +1,48 @@
+\chapter{Foundations and Concepts\label{cha:foundations}}
+This chapter introduces the core concepts required for the empirical evaluation in this thesis. It covers unit testing fundamentals, adequacy metrics such as coverage and mutation testing, automated test generation approaches, flaky tests, and the foundations of large language models for code.
+
+\section{Unit testing fundamentals\label{sec:foundations_unit_testing}}
+Unit tests are automated tests that validate small units of code, typically individual methods or classes, in isolation. Their purpose is to provide fast feedback, support refactoring, and reduce regression risk. A key challenge is the oracle problem: for many methods, expected behavior is not fully specified, which makes it difficult to design strong assertions that detect faults without over constraining valid behavior \cite{Myers2011ArtOfSoftwareTesting,IEEE610121990}.
+
+In practice, unit tests are often written using an Arrange Act Assert structure. Arrange prepares objects and inputs, Act executes the focal operation, and Assert checks expected outcomes. When teams operate under time pressure, unit tests are frequently underused, because they require additional effort to design meaningful assertions, create stable setup, and maintain tests as code evolves. This practical tension motivates the question whether LLM based test generation can reduce the cost barrier while preserving quality.
+
+\section{Test adequacy and quality metrics\label{sec:foundations_metrics}}
+\subsection{Coverage as an adequacy proxy}
+Coverage metrics quantify which parts of the program are executed by tests. Common variants include line coverage and branch coverage. Coverage is widely used as a proxy for test adequacy, but it does not guarantee fault detection. A test suite can execute code without validating outcomes, and high coverage can coexist with weak assertions \cite{Zhu1997}. Nevertheless, coverage can be a useful diagnostic signal, especially when combined with other indicators.
+
+A practical issue in empirical evaluations is focal execution. A generated test can compile and pass while never executing the intended focal method, for example if it tests unrelated code paths or shadows production types. In such cases, pass rate alone can be misleading. Therefore, this thesis treats focal execution, observed via coverage where available, as a stronger indicator of functional success.
+
+\subsection{Mutation testing}
+Mutation testing measures how well a test suite detects injected faults. A mutation tool creates small code changes, called mutants, and a test suite is considered stronger when it kills more mutants. Mutation score is often viewed as a closer approximation of fault detection capability than coverage \cite{Jia2011}. However, mutation testing is expensive and sensitive to project setup, tooling limitations, and timeouts. For this reason, mutation results are interpreted only where the metric is available and successfully measured.
+
+\subsection{Flaky tests}
+A test is flaky if it produces inconsistent outcomes across repeated executions without code changes. Flaky tests can be caused by timing, concurrency, shared state, environment assumptions, or dependence on external services \cite{Luo2014}. Flakiness reduces trust in test suites and can distort empirical measurements. This thesis includes a stability check based on repeated runs to detect non deterministic outcomes and to avoid over reporting unstable successes.
+
+\section{Automated unit test generation\label{sec:foundations_autogen}}
+Automated unit test generation predates LLMs and includes approaches such as random testing and search based software testing. Randoop generates sequences of calls and derives assertions from observed behavior \cite{Pacheco2007}. EvoSuite uses evolutionary search to maximize coverage and other objectives \cite{Fraser2011}. These approaches provide important baselines and conceptual framing, because they face similar challenges: test oracle quality, dependency setup, and the tradeoff between broad exploration and meaningful assertions.
+
+Empirical work has shown that automatically generated tests can achieve high coverage yet still vary in fault finding effectiveness \cite{Shamshiri2015}. This motivates evaluation protocols that separate compilation success, execution success, and adequacy signals such as coverage or mutation.
+
+\section{Large language models for code\label{sec:foundations_llm}}
+Large language models are trained on large corpora and can generate natural language and code. Modern LLMs demonstrate few shot and instruction following capabilities, which enable code related tasks such as summarization, code completion, and test generation \cite{Brown2020}. Code focused models have shown strong performance on code benchmarks and programming tasks, but they also exhibit hallucinations and brittle behavior when required context is missing \cite{Chen2021}.
+
+In unit test generation, an LLM must solve multiple sub problems:
+\begin{enumerate}
+  \item Infer intended behavior from a focal method and limited context
+  \item Construct valid setup and inputs that satisfy dependencies
+  \item Produce deterministic tests that compile in the target project
+  \item Provide meaningful assertions that detect faults without being overly strict
+\end{enumerate}
+This thesis frames LLM based unit test generation as an integration problem: even when the model can write plausible test code in isolation, it often fails to compile in real projects due to missing imports, inaccessible types, required constructors, or implicit conventions.
+
+\section{Evaluation concepts and threats\label{sec:foundations_evaluation}}
+Empirical evaluation of test generation requires careful operationalization of success. Compilation and pass rate are necessary but not sufficient, because they can be satisfied by trivial or misleading tests. This thesis therefore distinguishes technical success and functional success. Technical success requires compilation and stable execution. Functional success additionally requires focal execution, approximated by coverage greater than zero where available.
+
+Threats to validity commonly include:
+\begin{itemize}
+  \item Construct validity, when the chosen metrics do not reflect the intended concept of test usefulness
+  \item Internal validity, when uncontrolled factors such as unstable baselines or environment effects bias outcomes
+  \item External validity, when results do not generalize beyond the selected projects and methods
+\end{itemize}
+The experiment design in later chapters introduces gates and logging to address these threats and to make failures diagnosable and reproducible.
+
